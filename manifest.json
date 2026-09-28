@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Preenche Vaga",
+  "version": "0.1.0",
+  "description": "Preenche campos de candidatura com dados fictícios de currículo.",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/mapeamento.js", "content/preencher.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
