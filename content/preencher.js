@@ -1,4 +1,5 @@
 (() => {
+  /** @type {Record<string, string>} */
   const curriculo = {
     nome: "Ana Souza",
     email: "ana@exemplo.com",
@@ -7,13 +8,15 @@
     cidade: "São Paulo"
   };
 
+  /** @param {string} texto */
   const normalizar = (texto) => texto
     .toLocaleLowerCase("pt-BR")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
+  /** @param {HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement} elemento */
   const obterTextosDoCampo = (elemento) => {
-    const labels = Array.from(elemento.labels || [], (label) => label.textContent.trim());
+    const labels = Array.from(elemento.labels || [], (label) => (label.textContent || "").trim());
     return [
       ...labels,
       elemento.getAttribute("name") || "",
@@ -22,6 +25,7 @@
     ];
   };
 
+  /** @param {HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement} elemento */
   const encontrarCampo = (elemento) => {
     const textos = obterTextosDoCampo(elemento).map(normalizar);
     for (const texto of textos) {
@@ -33,6 +37,10 @@
     return null;
   };
 
+  /**
+   * @param {HTMLSelectElement} elemento
+   * @param {string} valor
+   */
   const preencherSelect = (elemento, valor) => {
     const valorNormalizado = normalizar(valor);
     const opcao = Array.from(elemento.options).find((item) =>
@@ -44,8 +52,11 @@
     return true;
   };
 
-  for (const elemento of document.querySelectorAll("input, textarea, select")) {
-    if (elemento.disabled || elemento.readOnly) continue;
+  /** @type {NodeListOf<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>} */
+  const campos = document.querySelectorAll("input, textarea, select");
+
+  for (const elemento of campos) {
+    if (elemento.disabled || ("readOnly" in elemento && elemento.readOnly)) continue;
     if (elemento.value.trim()) continue;
     if (elemento instanceof HTMLInputElement
       && ["hidden", "checkbox", "radio", "file", "submit", "reset", "button", "image"].includes(elemento.type)) {
@@ -53,6 +64,7 @@
     }
 
     const campo = encontrarCampo(elemento);
+    if (!campo) continue;
     const valor = curriculo[campo];
     if (!valor) continue;
 
