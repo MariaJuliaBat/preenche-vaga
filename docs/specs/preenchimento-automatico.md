@@ -1,6 +1,6 @@
 # Spec: Preenchimento Automático de Candidatura
 
-> Status: rascunho · Versão da extensão: 0.1.0
+> Status: rascunho · Versão da extensão: 0.2.0
 > Escrita com apoio de IA a partir do código em `content/` e do `CLAUDE.md`.
 
 ## 1. Objetivo
@@ -17,7 +17,7 @@ cruzar a fronteira.
 
 | Contexto | Responsabilidade | Onde vive no código | Status |
 |---|---|---|---|
-| **Cadastro de Currículo** | A Candidata cria e edita seu Currículo | `popup/` + `chrome.storage.local` | planejado |
+| **Cadastro de Currículo** | A Candidata cria e edita seu Currículo | `popup/` + `chrome.storage.local` | implementado |
 | **Preenchimento de Candidatura** *(foco desta spec)* | Encontrar Campos na página, reconhecê-los e preenchê-los | `content/preencher.js` | implementado |
 | **Mapeamento de Sites** | Manter os Sinônimos que ligam Campos a Dados do Currículo | `content/mapeamento.js` + skill `mapear-site-vaga` | implementado |
 
@@ -29,6 +29,11 @@ cruzar a fronteira.
   cria Sinônimos (isso é papel do *Mapeamento de Sites*).
 - Nenhum contexto tem permissão para **Enviar** a candidatura. Enviar é ato
   exclusivo da Candidata.
+- O Currículo real fica só em `chrome.storage.local` (neste navegador), nunca
+  no repositório. O *Cadastro* entrega o Currículo ao *Preenchimento* só quando
+  a Candidata clica em "Preencher esta página". Não há preenchimento automático
+  ao abrir páginas, porque qualquer site consegue ler o valor de um Campo
+  preenchido mesmo sem Enviar.
 
 ## 3. Linguagem Ubíqua
 
@@ -64,7 +69,7 @@ padrões, para não deixar ambiguidade.
 | # | Padrão EARS | Requisito |
 |---|---|---|
 | **R1** | Ubíquo | A extensão **deve** Preencher apenas Campos e **nunca deve** Enviar o Formulário de Candidatura nem acionar botões de envio. |
-| **R2** | Orientado a evento | **Quando** um Formulário de Candidatura terminar de carregar, a extensão **deve** Reconhecer cada Campo pelas Pistas na ordem label → name → id → placeholder e Preencher o Dado do Currículo correspondente. |
+| **R2** | Orientado a evento | **Quando** a Candidata pedir para Preencher (botão "Preencher esta página" no popup), a extensão **deve** Reconhecer cada Campo pelas Pistas na ordem label → name → id → placeholder e Preencher o Dado do Currículo correspondente. |
 | **R3** | Orientado a estado | **Enquanto** um Campo já estiver preenchido, desabilitado ou somente leitura, a extensão **deve** mantê-lo como Campo Ignorado, sem alterar seu valor. |
 | **R4** | Comportamento indesejado | **Se** nenhuma Pista do Campo contiver um Sinônimo do Mapeamento, **então** a extensão **deve** deixar o Campo vazio, sem erro e sem interromper o preenchimento dos demais Campos. |
 | **R5** | Opcional (funcionalidade) | **Onde** o Campo for uma lista de seleção (`select`), a extensão **deve** escolher a opção cujo texto ou valor Normalizado contenha o Dado do Currículo e, se não houver opção correspondente, deixar a seleção inalterada. |
@@ -86,7 +91,7 @@ Funcionalidade: Preenchimento automático de candidatura
     Dado um Formulário de Candidatura com o Campo de label "Nome completo"
     E um Campo de label "E-MAIL"
     E um botão "Enviar candidatura"
-    Quando o Formulário de Candidatura terminar de carregar
+    Quando a Candidata pedir para Preencher a página
     Então o Campo "Nome completo" deve conter "Ana Souza"
     E o Campo "E-MAIL" deve conter "ana@exemplo.com"
     E a candidatura não deve ter sido Enviada
@@ -94,14 +99,14 @@ Funcionalidade: Preenchimento automático de candidatura
   # Cobre R3
   Cenário: Não sobrescrever Campo já preenchido pela Candidata
     Dado um Formulário de Candidatura com o Campo de label "Nome" contendo "Ana S."
-    Quando o Formulário de Candidatura terminar de carregar
+    Quando a Candidata pedir para Preencher a página
     Então o Campo "Nome" deve continuar contendo "Ana S."
 
   # Cobre R4
   Cenário: Campo sem Sinônimo é ignorado sem quebrar os demais
     Dado um Formulário de Candidatura com o Campo de label "Pretensão salarial"
     E um Campo de label "E-mail"
-    Quando o Formulário de Candidatura terminar de carregar
+    Quando a Candidata pedir para Preencher a página
     Então o Campo "Pretensão salarial" deve continuar vazio
     E o Campo "E-mail" deve conter "ana@exemplo.com"
 
@@ -110,7 +115,7 @@ Funcionalidade: Preenchimento automático de candidatura
     Dado que o Currículo da Candidata tem o portfolio "github.com/anasouza-exemplo"
     E um Formulário de Candidatura com o Campo de label "Portfólio"
     E um Campo sem label com placeholder "Link do seu GitHub"
-    Quando o Formulário de Candidatura terminar de carregar
+    Quando a Candidata pedir para Preencher a página
     Então os dois Campos devem conter "github.com/anasouza-exemplo"
 ```
 
@@ -119,12 +124,11 @@ Funcionalidade: Preenchimento automático de candidatura
 | Critério | Cenário BDD | Código |
 |---|---|---|
 | R1 | Preencher Campos reconhecidos sem Enviar | `preencher.js` (ausência de `.submit()`; tipos `submit`/`button` ignorados) |
-| R2 | Preencher Campos reconhecidos sem Enviar; Preencher o Portfólio pela label ou pelo placeholder | `obterTextosDoCampo`, `encontrarCampo`, `run_at: document_idle` |
+| R2 | Preencher Campos reconhecidos sem Enviar | `obterTextosDoCampo`, `encontrarCampo`, botão "Preencher esta página" em `popup/popup.js` |
 | R3 | Não sobrescrever Campo já preenchido | `if (elemento.disabled \|\| elemento.readOnly)`, `if (elemento.value.trim())` |
 | R4 | Campo sem Sinônimo é ignorado | `if (!valor) continue;` |
 | R5 | — (candidato a cenário futuro) | `preencherSelect` |
 
 ## 7. Fora do escopo
 
-- Tela de cadastro do Currículo (`popup/`) — contexto *Cadastro de Currículo*.
 - Upload de arquivo de currículo (PDF), CAPTCHA, senha e aceite de termos.

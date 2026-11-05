@@ -6,3 +6,6 @@ interface ItemMapeamento {
 }
 
 declare var MAPEAMENTO_CAMPOS: ItemMapeamento[];
+
+// Currículo injetado pelo popup antes de rodar content/preencher.js.
+declare var CURRICULO: Record<string, string> | undefined;

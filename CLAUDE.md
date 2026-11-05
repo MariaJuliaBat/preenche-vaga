@@ -22,6 +22,8 @@ envia a candidatura: a pessoa sempre revisa e clica em enviar.
 - Para identificar um campo, usar label, name, id e placeholder, nessa ordem.
 - Nunca chamar .submit() nem clicar em botões de envio.
 - Nunca commitar dados reais de currículo; usar só dados fictícios.
+- Preencher só quando a pessoa clica em "Preencher esta página" no popup;
+  nada de content_scripts automáticos com dados do currículo.
 
 ## Comandos
 - `npx serve paginas-teste` — sobe as páginas de teste em http://localhost:3000

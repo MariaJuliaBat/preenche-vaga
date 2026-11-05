@@ -1,13 +1,10 @@
+// Roda só quando a Candidata clica em "Preencher esta página" no popup.
+// O popup injeta antes o Currículo em globalThis.CURRICULO (lido do chrome.storage.local).
+// Devolve quantos Campos foram preenchidos, para o popup mostrar à Candidata.
 (() => {
   /** @type {Record<string, string>} */
-  const curriculo = {
-    nome: "Ana Souza",
-    email: "ana@exemplo.com",
-    telefone: "(11) 99999-0000",
-    linkedin: "linkedin.com/in/anasouza",
-    portfolio: "github.com/anasouza-exemplo",
-    cidade: "São Paulo"
-  };
+  const curriculo = globalThis.CURRICULO || {};
+  let preenchidos = 0;
 
   /** @param {string} texto */
   const normalizar = (texto) => texto
@@ -76,5 +73,8 @@
 
     elemento.dispatchEvent(new Event("input", { bubbles: true }));
     elemento.dispatchEvent(new Event("change", { bubbles: true }));
+    preenchidos += 1;
   }
+
+  return preenchidos;
 })();
