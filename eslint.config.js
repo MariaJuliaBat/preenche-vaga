@@ -9,7 +9,7 @@ module.exports = [
     files: ["content/**/*.js", "popup/**/*.js"],
     languageOptions: {
       sourceType: "script",
-      globals: { ...globals.browser, ...globals.webextensions, MAPEAMENTO_CAMPOS: "readonly" }
+      globals: { ...globals.browser, ...globals.webextensions, MAPEAMENTO_CAMPOS: "readonly", ImportarDocx: "readonly" }
     }
   },
   {

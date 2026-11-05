@@ -76,5 +76,8 @@
     preenchidos += 1;
   }
 
+  // Não deixa o Currículo real na memória da aba depois de Preencher.
+  delete globalThis.CURRICULO;
+
   return preenchidos;
 })();
