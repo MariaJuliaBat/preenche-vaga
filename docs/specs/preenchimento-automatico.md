@@ -119,7 +119,7 @@ Funcionalidade: Preenchimento automático de candidatura
 | Critério | Cenário BDD | Código |
 |---|---|---|
 | R1 | Preencher Campos reconhecidos sem Enviar | `preencher.js` (ausência de `.submit()`; tipos `submit`/`button` ignorados) |
-| R2 | Preencher Campos reconhecidos sem Enviar | `obterTextosDoCampo`, `encontrarCampo`, `run_at: document_idle` |
+| R2 | Preencher Campos reconhecidos sem Enviar; Preencher o Portfólio pela label ou pelo placeholder | `obterTextosDoCampo`, `encontrarCampo`, `run_at: document_idle` |
 | R3 | Não sobrescrever Campo já preenchido | `if (elemento.disabled \|\| elemento.readOnly)`, `if (elemento.value.trim())` |
 | R4 | Campo sem Sinônimo é ignorado | `if (!valor) continue;` |
 | R5 | — (candidato a cenário futuro) | `preencherSelect` |

@@ -77,9 +77,11 @@ test("Preenche o Portfólio reconhecido por label com acento ou por placeholder 
   const doc = carregar(`
     <label for="p">Portfólio</label><input id="p">
     <input id="g" placeholder="Link do seu GitHub">
+    <label for="s">Site pessoal</label><input id="s">
     <label for="l">LinkedIn</label><input id="l">`);
   assert.strictEqual(doc.getElementById("p").value, "github.com/anasouza-exemplo");
   assert.strictEqual(doc.getElementById("g").value, "github.com/anasouza-exemplo");
+  assert.strictEqual(doc.getElementById("s").value, "github.com/anasouza-exemplo");
   assert.strictEqual(doc.getElementById("l").value, "linkedin.com/in/anasouza");
 });
 
