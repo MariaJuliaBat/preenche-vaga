@@ -73,6 +73,16 @@ test("Reconhece pela ordem label, name, id, placeholder (R2)", () => {
   assert.strictEqual(doc.getElementById("y").value, "São Paulo");
 });
 
+test("Preenche o Portfólio reconhecido por label com acento ou por placeholder (R2)", () => {
+  const doc = carregar(`
+    <label for="p">Portfólio</label><input id="p">
+    <input id="g" placeholder="Link do seu GitHub">
+    <label for="l">LinkedIn</label><input id="l">`);
+  assert.strictEqual(doc.getElementById("p").value, "github.com/anasouza-exemplo");
+  assert.strictEqual(doc.getElementById("g").value, "github.com/anasouza-exemplo");
+  assert.strictEqual(doc.getElementById("l").value, "linkedin.com/in/anasouza");
+});
+
 test("Escolhe a opção correspondente em select (R5)", () => {
   const doc = carregar(`
     <label for="c">Cidade</label>

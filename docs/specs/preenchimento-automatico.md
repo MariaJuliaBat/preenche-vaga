@@ -39,7 +39,8 @@ código.
 |---|---|---|
 | **Candidata** | Pessoa que usa a extensão para se candidatar a vagas. | — |
 | **Currículo** | Conjunto de Dados do Currículo da Candidata, cadastrado uma única vez. | `curriculo` |
-| **Dado do Currículo** | Uma informação do Currículo: nome, email, telefone, linkedin, cidade. | chaves de `curriculo` |
+| **Dado do Currículo** | Uma informação do Currículo: nome, email, telefone, linkedin, portfolio, cidade. | chaves de `curriculo` |
+| **Portfólio** | Link para trabalhos da Candidata (GitHub ou site pessoal). | `portfolio` |
 | **Formulário de Candidatura** | Página de um Site de Vagas onde a Candidata informa seus dados. | `document` |
 | **Site de Vagas** | Plataforma que hospeda Formulários (Gupy, Vagas.com, Catho). | — |
 | **Campo** | Elemento editável do formulário: `input`, `textarea` ou `select`. | `elemento` |
@@ -103,6 +104,14 @@ Funcionalidade: Preenchimento automático de candidatura
     Quando o Formulário de Candidatura terminar de carregar
     Então o Campo "Pretensão salarial" deve continuar vazio
     E o Campo "E-mail" deve conter "ana@exemplo.com"
+
+  # Cobre R2
+  Cenário: Preencher o Portfólio pela label ou pelo placeholder
+    Dado que o Currículo da Candidata tem o portfolio "github.com/anasouza-exemplo"
+    E um Formulário de Candidatura com o Campo de label "Portfólio"
+    E um Campo sem label com placeholder "Link do seu GitHub"
+    Quando o Formulário de Candidatura terminar de carregar
+    Então os dois Campos devem conter "github.com/anasouza-exemplo"
 ```
 
 ## 6. Rastreabilidade
