@@ -5,6 +5,7 @@
     email: "ana@exemplo.com",
     telefone: "(11) 99999-0000",
     linkedin: "linkedin.com/in/anasouza",
+    portfolio: "github.com/anasouza-exemplo",
     cidade: "São Paulo"
   };
 

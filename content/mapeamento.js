@@ -16,6 +16,10 @@ globalThis.MAPEAMENTO_CAMPOS = [
     palavras: ["linkedin", "perfil profissional"]
   },
   {
+    campo: "portfolio",
+    palavras: ["portfolio", "github", "site pessoal"]
+  },
+  {
     campo: "cidade",
     palavras: ["cidade", "city", "localidade"]
   }
