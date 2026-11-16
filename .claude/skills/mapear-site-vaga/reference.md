@@ -7,10 +7,11 @@
 | email | e-mail, email, correio eletrônico |
 | telefone | telefone, celular, whatsapp, phone |
 | linkedin | linkedin, perfil profissional |
+| portfolio | portfolio, github, site pessoal |
 | cidade | cidade, localidade, city, onde você mora |
 
 ## Formato de uma entrada em mapeamento.js
-{ campo: "telefone", sinonimos: ["telefone", "celular", "whatsapp"] }
+{ campo: "telefone", palavras: ["telefone", "celular", "whatsapp"] }
 
 ## Campos que nunca devem ser preenchidos
 - Senhas e confirmações de senha
