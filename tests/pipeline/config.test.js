@@ -69,3 +69,28 @@ test("Dados Complementares ficam em secrets/ (ignorado pelo Git) por padrão", (
   const { dadosComplementares } = montarConfig({});
   assert.ok(dadosComplementares.endsWith(path.join("secrets", "dados-complementares.json")));
 });
+
+test("Radar: padrões de vigência (20 dias), lote (10) e repositórios", () => {
+  const { radar } = montarConfig({});
+  assert.strictEqual(radar.vigenciaDias, 20);
+  assert.strictEqual(radar.maxVagasLote, 10);
+  assert.deepStrictEqual(radar.reposGithub, ["frontendbr/vagas", "backend-br/vagas"]);
+  assert.deepStrictEqual(radar.stack, []);
+});
+
+test("Radar: lê RADAR_VIGENCIA_DIAS, MAX_VAGAS_LOTE, repositórios e stack do .env", () => {
+  const { radar } = montarConfig({
+    RADAR_VIGENCIA_DIAS: "15", MAX_VAGAS_LOTE: "8", RADAR_REPOS_GITHUB: "org/a, org/b ", RADAR_STACK: "React, Node.js", GITHUB_TOKEN: "FICTICIO"
+  });
+  assert.deepStrictEqual([radar.vigenciaDias, radar.maxVagasLote], [15, 8]);
+  assert.deepStrictEqual(radar.reposGithub, ["org/a", "org/b"]);
+  assert.deepStrictEqual(radar.stack, ["React", "Node.js"]);
+  assert.strictEqual(radar.githubToken, "FICTICIO");
+});
+
+test("RD23: vigência ou lote que não seja inteiro positivo para com erro claro", () => {
+  for (const ruim of ["0", "-3", "abc", "2.5", "10 dias"]) {
+    assert.throws(() => montarConfig({ MAX_VAGAS_LOTE: ruim }), /MAX_VAGAS_LOTE/);
+    assert.throws(() => montarConfig({ RADAR_VIGENCIA_DIAS: ruim }), /RADAR_VIGENCIA_DIAS/);
+  }
+});

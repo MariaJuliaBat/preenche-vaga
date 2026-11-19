@@ -4,7 +4,6 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { executar, lerArgumentos } = require("../../pipeline/cli");
-const logs = require("../../pipeline/logs");
 const { formatarResumo, resultadoVazio } = require("../../pipeline/resumo");
 
 test("sem opções roda as três etapas", () => {
@@ -39,7 +38,7 @@ test("sem configuração, avisa o que falta e sai com 1", async () => {
   assert.match(saidas.join(""), /GOOGLE_SHEET_URL/);
 });
 
-test("execução com config válida imprime o resumo e os logs de pistas", async () => {
+test("execução com config válida imprime o resumo da etapa (aqui uma etapa falsa, sem rede)", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "saida-"));
   const conta = path.join(dir, "conta.json");
   fs.writeFileSync(conta, "{}"); // arquivo fictício, só para existir
@@ -48,16 +47,18 @@ test("execução com config válida imprime o resumo e os logs de pistas", async
     GOOGLE_SERVICE_ACCOUNT_FILE: conta,
     OUTPUT_DIR: path.join(dir, "output")
   };
-  logs.registrar(path.join(dir, "output", "logs"), "pistas", { titulo: "Dev Jr Fictícia", motivo: "sem link individual" });
+  const etapas = {
+    radar: async ({ resultado }) => { resultado.pistas.push({ titulo: "Dev Jr Fictícia", motivo: "sem link individual" }); }
+  };
 
   const saidas = [];
-  const codigo = await executar(["--only-radar", "--dry-run"], { env, saida: (t) => saidas.push(t) });
+  const codigo = await executar(["--only-radar", "--dry-run"], { env, etapas, saida: (t) => saidas.push(t) });
   const texto = saidas.join("\n");
   assert.strictEqual(codigo, 0);
   assert.match(texto, /dry-run/);
   assert.match(texto, /Pistas para revisão manual: 1/);
   assert.match(texto, /Dev Jr Fictícia/);
-  assert.match(texto, /Etapa ainda não implementada: radar/);
+  assert.doesNotMatch(texto, /Etapa ainda não implementada: radar/);
 });
 
 test("resumo calcula % de Brasília e alerta abaixo de 50%", () => {

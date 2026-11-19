@@ -59,6 +59,21 @@ function lerAutoSubmit(valor) {
 }
 
 /**
+ * Inteiro positivo do .env (RD23). Vazio usa o padrão; qualquer outra coisa que não seja inteiro positivo é erro.
+ * @param {string | undefined} valor
+ * @param {string} nome
+ * @param {number} padrao
+ */
+function lerInteiroPositivo(valor, nome, padrao) {
+  if (valor === undefined || valor === "") return padrao;
+  if (!/^[1-9][0-9]*$/.test(valor.trim())) throw new Error(`${nome} deve ser um número inteiro maior que zero (recebi "${valor}").`);
+  return Number.parseInt(valor.trim(), 10);
+}
+
+/** @param {string | undefined} valor */
+const lerLista = (valor) => String(valor || "").split(",").map((x) => x.trim()).filter(Boolean);
+
+/**
  * Extrai o ID de uma URL do Google Sheets/Docs (…/d/<id>/…).
  * @param {string} url
  */
@@ -91,6 +106,16 @@ function montarConfig(env, opcoes = {}) {
     anthropicApiKey: env.ANTHROPIC_API_KEY || "",
     dadosComplementares: path.resolve(RAIZ, env.DADOS_COMPLEMENTARES_FILE || "secrets/dados-complementares.json"),
     planilha: PLANILHA,
+    radar: {
+      vigenciaDias: lerInteiroPositivo(env.RADAR_VIGENCIA_DIAS, "RADAR_VIGENCIA_DIAS", 20),
+      maxVagasLote: lerInteiroPositivo(env.MAX_VAGAS_LOTE, "MAX_VAGAS_LOTE", 10),
+      reposGithub: env.RADAR_REPOS_GITHUB !== undefined && env.RADAR_REPOS_GITHUB !== ""
+        ? lerLista(env.RADAR_REPOS_GITHUB)
+        : ["frontendbr/vagas", "backend-br/vagas"],
+      githubToken: env.GITHUB_TOKEN || "",
+      // Provisório até o Perfil (P18) existir: a stack vem do .env, que fica fora do Git.
+      stack: lerLista(env.RADAR_STACK)
+    },
     pastas: {
       saida,
       curriculos: path.join(saida, "cvs"),

@@ -11,6 +11,7 @@ const { parseArgs } = require("node:util");
 const { ETAPAS, lerArquivoEnv, montarConfig, validar } = require("./config");
 const logs = require("./logs");
 const { resultadoVazio, formatarResumo } = require("./resumo");
+const { criarEtapaRadar } = require("./radar/etapa");
 
 const AJUDA = `Uso: npm run pipeline -- [opções]
 
@@ -26,7 +27,7 @@ AUTO_SUBMIT=false é o padrão: o pipeline preenche mas não envia.`;
 // Cada etapa entra aqui quando for implementada; até lá, só avisa. Contrato: executar(contexto) → void,
 // somando em contexto.resultado.
 /** @type {Record<string, (contexto: any) => Promise<void>>} */
-const IMPLEMENTADAS = {};
+const IMPLEMENTADAS = { radar: criarEtapaRadar() };
 
 /**
  * @param {string[]} argv
@@ -60,7 +61,7 @@ function lerArgumentos(argv) {
 
 /**
  * @param {string[]} argv
- * @param {{ env?: Record<string, string | undefined>, saida?: (texto: string) => void }} [io]
+ * @param {{ env?: Record<string, string | undefined>, saida?: (texto: string) => void, etapas?: Record<string, (contexto: any) => Promise<void>> }} [io] `etapas` substitui as etapas reais (testes)
  * @returns {Promise<number>} código de saída
  */
 async function executar(argv, io = {}) {
@@ -83,7 +84,7 @@ async function executar(argv, io = {}) {
 
     const resultado = resultadoVazio();
     for (const etapa of args.etapas) {
-      const rodar = IMPLEMENTADAS[etapa];
+      const rodar = (io.etapas || IMPLEMENTADAS)[etapa];
       if (!rodar) {
         resultado.etapasNaoImplementadas.push(etapa);
         continue;
@@ -91,8 +92,6 @@ async function executar(argv, io = {}) {
       await rodar({ config, resultado, logs });
     }
 
-    resultado.pistas.push(...logs.ler(config.pastas.logs, "pistas"));
-    resultado.descartes.push(...logs.ler(config.pastas.logs, "descartes"));
     saida(formatarResumo(resultado, config));
     return 0;
   } catch (erro) {
