@@ -16,7 +16,9 @@ function linhasDoCv(cv) {
   const linhas = [];
   linhas.push({ tipo: "nome", texto: id.nome || "" });
   const local = juntar([id.cidade, id.estado], " - ");
-  const contato = juntar([id.email, id.telefone, local, id.linkedin, id.github, id.portfolio]);
+  // Sem "https://" nos links: o texto fica mais curto e continua legível para o ATS.
+  const semProtocolo = (/** @type {string | null} */ url) => (url ? url.replace(/^https?:\/\/(www\.)?/, "") : url);
+  const contato = juntar([id.email, id.telefone, local, semProtocolo(id.linkedin), semProtocolo(id.github), semProtocolo(id.portfolio)]);
   if (contato) linhas.push({ tipo: "contato", texto: contato });
 
   if (cv.resumo) linhas.push({ tipo: "secao", texto: "Resumo" }, { tipo: "texto", texto: cv.resumo });

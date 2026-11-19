@@ -14,7 +14,8 @@
  * @property {{ conector: string, foco: string, erro: string }[]} falhasConectores
  * @property {boolean} segundaBusca o Radar precisou da segunda busca focada no DF
  * @property {number} gravadasNaPlanilha
- * @property {{ titulo: string, arquivo: string, avisos: string[] }[]} curriculos PDFs sob medida gerados
+ * @property {{ titulo: string, arquivo: string, avisos: string[], palavrasChave?: { casadas: string[], lacunas: string[] } }[]} curriculos PDFs sob medida gerados
+ * @property {{ formacoes: number, experiencias: number, projetos: number, habilidades: number, idiomas: number } | null} perfilLido o que o parser leu do Currículo Base (só contagens)
  * @property {{ titulo: string, erro: string }[]} falhasCurriculo vagas cujo currículo não foi gerado
  * @property {string[]} avisosPerfil avisos do Perfil (Ancoragem, Perfil indisponível etc.)
  * @property {string[]} etapasNaoImplementadas
@@ -35,6 +36,7 @@ const resultadoVazio = () => ({
   segundaBusca: false,
   gravadasNaPlanilha: 0,
   curriculos: [],
+  perfilLido: null,
   falhasCurriculo: [],
   avisosPerfil: [],
   etapasNaoImplementadas: []
@@ -79,10 +81,15 @@ function formatarResumo(r, modo) {
   for (const f of r.falhasConectores) linhas.push(`Falha no Conector ${f.conector} (busca ${f.foco}): ${f.erro}`);
   for (const alerta of r.alertasFormacao) linhas.push(`Alerta de formação — ${alerta}`);
   for (const pista of r.pistas) linhas.push(`  pista: ${pista.titulo || pista.url || "(sem título)"} — ${pista.motivo || ""}`);
+  if (r.perfilLido) {
+    const p = r.perfilLido;
+    linhas.push(`Perfil lido do Currículo Base: ${p.formacoes} formação(ões), ${p.experiencias} experiência(s), ${p.projetos} projeto(s), ${p.habilidades} habilidade(s), ${p.idiomas} idioma(s)`);
+  }
   if (r.curriculos.length > 0 || r.falhasCurriculo.length > 0) {
     linhas.push(`Currículos sob medida gerados: ${r.curriculos.length}`);
     for (const c of r.curriculos) {
       linhas.push(`  - ${c.titulo} → ${c.arquivo}`);
+      if (c.palavrasChave) linhas.push(`      palavras-chave da vaga que você tem: ${c.palavrasChave.casadas.join(", ") || "(nenhuma)"}`);
       for (const aviso of c.avisos) linhas.push(`      aviso: ${aviso}`);
     }
     for (const falha of r.falhasCurriculo) linhas.push(`Falha ao gerar currículo para "${falha.titulo}": ${falha.erro}`);
