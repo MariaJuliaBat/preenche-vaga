@@ -1,6 +1,6 @@
 # Spec: Radar de Vagas
 
-> Status: rascunho · Passo 3 do Pipeline (nada implementado ainda)
+> Status: aprovada pela Candidata · Passo 3 do Pipeline (implementação em andamento)
 > Refina P7 a P11 de `pipeline-candidatura.md`. Usa a Planilha de Controle do módulo `pipeline/sheets.js`.
 
 ## 1. Objetivo
@@ -37,10 +37,11 @@ de nenhuma fonte; só o `sheets.js` escreve na planilha. O Radar **não** abre f
 | **Região Administrativa (RA)** | Águas Claras, Asa Norte, Asa Sul, Taguatinga, Guará, Sobradinho, Gama, Samambaia, Vicente Pires, Sudoeste, Noroeste, Lago Norte, Lago Sul, Park Way. | `REGIOES_DF` |
 | **Nível Permitido** | Estágio, Júnior ou Trainee, em desenvolvimento ou tecnologia. | `NIVEIS_PERMITIDOS` |
 | **Vigência** | Idade máxima da publicação (padrão 20 dias, configurável). | `RADAR_VIGENCIA_DIAS` |
+| **Tamanho do Lote** | Máximo de vagas no Lote Final por execução (padrão 10, configurável). | `MAX_VAGAS_LOTE` |
 | **Sinal de Golpe** | Pedido de pagamento, compra de curso, dado bancário ou documento sensível antecipado. | `sinaisDeGolpe` |
 | **Pontuação** | Número que ordena as vagas aprovadas. Não aprova nem recusa. | `pontuar` |
 | **Lote Final** | Vagas aprovadas, ordenadas, que seguem para a planilha e para as próximas Etapas. | `lote` |
-| **Cota DF** | Mínimo de 50% de Vagas DF no Lote Final. | `COTA_DF` |
+| **Cota DF** | Mínimo de 50% de Vagas DF no Lote Final (com lote de 10, no mínimo 5). | `COTA_DF` |
 | **Alerta de Formação** | Aviso na coluna L quando a vaga exige grau diferente do que o Perfil registra. | `alertaFormacao` |
 
 Termos a evitar: "vaga válida" (use **aprovada**), "local" sozinho (use **Local Elegível** ou **Vaga DF**), "filtro" para a Pontuação.
@@ -78,7 +79,7 @@ Ordem de avaliação: segurança, vigência, link e data, nível, local, remuner
 |---|---|---|
 | **RD14** | Ubíquo | A Pontuação **deve** apenas ordenar vagas já aprovadas; uma pontuação baixa **não deve** descartar. |
 | **RD15** | Ubíquo | A Pontuação **deve** somar pontos por termo da stack encontrado, onde a stack é a lista de habilidades técnicas do Perfil (P18d), e **deve** dar o peso máximo a termos de IA aplicada: prompt engineering, Spec-Driven Development (SDD), Claude Code, Cursor, GitHub Copilot, automação com IA. |
-| **RD16** | Ubíquo | Os pesos **devem** ficar em um único objeto de configuração (`pipeline/radar/pesos.js`), não espalhados no código. Proposta inicial: IA aplicada = 5, termo da stack = 2, nível Estágio, Júnior ou Trainee explícito = 1. |
+| **RD16** | Ubíquo | Os pesos **devem** ficar em um único objeto de configuração (`pipeline/radar/pesos.js`), não espalhados no código. Valores aprovados: IA aplicada = 5, termo da stack = 2, nível Estágio, Júnior ou Trainee explícito = 1, Vaga DF = +2 (para os locais subirem no ranking). |
 
 ### Cota DF e Lote Final
 
@@ -87,7 +88,8 @@ Ordem de avaliação: segurança, vigência, link e data, nível, local, remuner
 | **RD17** | Estado | **Enquanto** o Lote Final tiver menos de 50% de Vagas DF, o Radar **deve** disparar **uma** segunda busca com `foco: "df"` em todos os Conectores. |
 | **RD18** | Indesejado | **Se** mesmo após a segunda busca a Cota DF não for atingida, **então** o Radar **deve** entregar o que encontrou, sinalizar no resumo "abaixo de 50% DF" com o percentual real, e **nunca** completar com vaga presencial ou híbrida de outra cidade. |
 | **RD19** | Ubíquo | Remoto **não deve** contar como Vaga DF no cálculo da Cota DF. |
-| **RD20** | Evento | **Quando** o Radar terminar, ele **deve** ordenar o Lote Final por Pontuação e, para a Cota DF, **deve** preferir Vagas DF de maior pontuação até atingir a cota, sem excluir vagas remotas melhores além do necessário. |
+| **RD20** | Evento | **Quando** o Radar montar o Lote Final, ele **deve** limitá-lo a `MAX_VAGAS_LOTE` vagas (padrão 10), reservar primeiro `ceil(50% × tamanho do lote)` posições para as Vagas DF de maior Pontuação disponíveis e preencher o restante pelas de maior Pontuação, de qualquer local. |
+| **RD23** | Ubíquo | O Radar **deve** ler `RADAR_VIGENCIA_DIAS` (padrão 20) e `MAX_VAGAS_LOTE` (padrão 10) do `.env`; valor que não seja inteiro positivo **deve** parar a execução com erro claro (como em P3). |
 | **RD21** | Evento | **Quando** o Radar terminar, ele **deve** entregar ao resumo (P6): aprovadas, % DF, Pistas, Descartes por motivo, falhas de Conector e Alertas de Formação. |
 | **RD22** | Indesejado | **Se** `--dry-run` estiver ligado, **então** o Radar **deve** buscar e classificar normalmente, mas **não deve** escrever na planilha; os `.jsonl` de `output/logs/` continuam sendo escritos (P4). |
 
@@ -221,6 +223,13 @@ Funcionalidade: Radar de Vagas
     Então as vagas do segundo Conector devem ser processadas
     E o resumo deve listar a falha do primeiro
 
+  # Cobre RD20 e RD23
+  Cenário: Lote limitado a 10 com pelo menos 5 Vagas DF
+    Dado 14 vagas aprovadas, 7 delas Vagas DF, e MAX_VAGAS_LOTE=10
+    Quando o Radar montar o Lote Final
+    Então o Lote Final deve ter 10 vagas
+    E pelo menos 5 devem ser Vagas DF
+
   # Cobre RD22
   Cenário: Dry-run não escreve na planilha
     Dado uma execução com --dry-run e 2 vagas aprovadas
@@ -240,7 +249,7 @@ Funcionalidade: Radar de Vagas
 | RD7 a RD12 | Vigência, Sem data, Nível, Local, Voluntariado | `pipeline/radar/classificar.js` |
 | RD13 | Exigência de Bacharelado... | `pipeline/radar/classificar.js` (`alertaFormacao`) |
 | RD14 a RD16 | IA aplicada pontua mais... | `pipeline/radar/pontuar.js`, `pesos.js` |
-| RD17 a RD20 | Cota DF (2 cenários) | `pipeline/radar/lote.js` |
+| RD17 a RD20, RD23 | Cota DF (2 cenários), Lote limitado a 10 | `pipeline/radar/lote.js` |
 | RD21 | — | `pipeline/resumo.js` |
 | RD22 | Dry-run... | `montarConfig` (`escreverPlanilha`) |
 
@@ -253,9 +262,9 @@ Cada linha "planejado" vira teste em `tests/pipeline/radar/`, com Vagas Brutas f
 - Gerar currículo e preencher candidatura (Etapas `curriculo` e `candidatura`).
 - Decidir o tamanho máximo do Lote Final (a definir, ver pontos abertos).
 
-## 8. Pontos abertos
+## 8. Decisões da Candidata (fechadas)
 
-1. **Vigência:** a decisão disse "15 a 20 dias"; a spec adota **20** (como P9), configurável por `RADAR_VIGENCIA_DIAS`.
-2. **Tamanho do Lote Final** por execução (ex.: 10, 20): sem valor definido.
-3. **Pesos de Pontuação** (RD16) são proposta e podem ser ajustados.
-4. **Nível não identificável** vira Pista (RD9): confirmar se a Candidata prefere assim ou aprovar com alerta.
+1. **Vigência:** 20 dias, configurável (RD7, RD23).
+2. **Tamanho do Lote:** 10 vagas por execução, configurável. Motivos: evitar bloqueio nos portais, controlar gasto de tokens e tornar a Cota DF exata (mínimo de 5 em 10).
+3. **Pesos:** IA aplicada = 5, stack = 2, nível = 1, Vaga DF = +2 (RD16).
+4. **Nível não identificável:** vai para Pista (RD9), para não arriscar candidatura em vaga Pleno ou Sênior disfarçada.
