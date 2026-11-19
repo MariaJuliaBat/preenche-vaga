@@ -1,6 +1,6 @@
 # Spec: Radar de Vagas
 
-> Status: aprovada pela Candidata · Passo 3 do Pipeline (implementação em andamento)
+> Status: aprovada pela Candidata · Passo 3 do Pipeline (implementado no PR #11)
 > Refina P7 a P11 de `pipeline-candidatura.md`. Usa a Planilha de Controle do módulo `pipeline/sheets.js`.
 
 ## 1. Objetivo
@@ -59,7 +59,7 @@ Termos a evitar: "vaga válida" (use **aprovada**), "local" sozinho (use **Local
 
 ### Classificação: Descarte, Pista ou aprovada
 
-Ordem de avaliação: segurança, vigência, link e data, nível, local, remuneração. O primeiro motivo vence e fica registrado.
+Ordem de avaliação: segurança, encerrada, vigência, nível, área, local, remuneração e, só então, as Pistas (link individual, data, nível e local não identificados). O primeiro motivo vence e fica registrado. Uma vaga que seria descartada **nunca** vira Pista.
 
 | # | Padrão | Requisito |
 |---|---|---|
@@ -85,10 +85,11 @@ Ordem de avaliação: segurança, vigência, link e data, nível, local, remuner
 
 | # | Padrão | Requisito |
 |---|---|---|
-| **RD17** | Estado | **Enquanto** o Lote Final tiver menos de 50% de Vagas DF, o Radar **deve** disparar **uma** segunda busca com `foco: "df"` em todos os Conectores. |
+| **RD17** | Estado | **Enquanto** o Lote Final tiver menos de 50% de Vagas DF, ou estiver vazio, o Radar **deve** disparar **uma** segunda busca com `foco: "df"` em todos os Conectores. |
 | **RD18** | Indesejado | **Se** mesmo após a segunda busca a Cota DF não for atingida, **então** o Radar **deve** entregar o que encontrou, sinalizar no resumo "abaixo de 50% DF" com o percentual real, e **nunca** completar com vaga presencial ou híbrida de outra cidade. |
 | **RD19** | Ubíquo | Remoto **não deve** contar como Vaga DF no cálculo da Cota DF. |
 | **RD20** | Evento | **Quando** o Radar montar o Lote Final, ele **deve** limitá-lo a `MAX_VAGAS_LOTE` vagas (padrão 10), reservar primeiro `ceil(50% × tamanho do lote)` posições para as Vagas DF de maior Pontuação disponíveis e preencher o restante pelas de maior Pontuação, de qualquer local. |
+| **RD24** | Indesejado | **Se** a vaga passar nas demais regras mas o Local não puder ser identificado (sem modalidade e sem cidade), **então** o Radar **deve** registrá-la como Pista com o motivo "local não informado". |
 | **RD23** | Ubíquo | O Radar **deve** ler `RADAR_VIGENCIA_DIAS` (padrão 20) e `MAX_VAGAS_LOTE` (padrão 10) do `.env`; valor que não seja inteiro positivo **deve** parar a execução com erro claro (como em P3). |
 | **RD21** | Evento | **Quando** o Radar terminar, ele **deve** entregar ao resumo (P6): aprovadas, % DF, Pistas, Descartes por motivo, falhas de Conector e Alertas de Formação. |
 | **RD22** | Indesejado | **Se** `--dry-run` estiver ligado, **então** o Radar **deve** buscar e classificar normalmente, mas **não deve** escrever na planilha; os `.jsonl` de `output/logs/` continuam sendo escritos (P4). |
@@ -246,7 +247,7 @@ Funcionalidade: Radar de Vagas
 | RD3 | Um Conector falha... | `pipeline/radar/index.js` |
 | RD4 | Vaga já registrada... | `normalizarUrl` (`pipeline/sheets.js`), `pipeline/radar/classificar.js` |
 | RD5, RD6 | Pedido de pagamento..., Instrução escondida... | `pipeline/radar/seguranca.js` |
-| RD7 a RD12 | Vigência, Sem data, Nível, Local, Voluntariado | `pipeline/radar/classificar.js` |
+| RD7 a RD12, RD24 | Vigência, Sem data, Nível, Local, Voluntariado | `pipeline/radar/classificar.js` |
 | RD13 | Exigência de Bacharelado... | `pipeline/radar/classificar.js` (`alertaFormacao`) |
 | RD14 a RD16 | IA aplicada pontua mais... | `pipeline/radar/pontuar.js`, `pesos.js` |
 | RD17 a RD20, RD23 | Cota DF (2 cenários), Lote limitado a 10 | `pipeline/radar/lote.js` |
@@ -263,6 +264,8 @@ Cada linha "planejado" vira teste em `tests/pipeline/radar/`, com Vagas Brutas f
 - Decidir o tamanho máximo do Lote Final (a definir, ver pontos abertos).
 
 ## 8. Decisões da Candidata (fechadas)
+
+> Ajustes feitos durante a implementação (PR do Radar): RD24, o lote vazio em RD17 e a ordem de avaliação acima.
 
 1. **Vigência:** 20 dias, configurável (RD7, RD23).
 2. **Tamanho do Lote:** 10 vagas por execução, configurável. Motivos: evitar bloqueio nos portais, controlar gasto de tokens e tornar a Cota DF exata (mínimo de 5 em 10).
