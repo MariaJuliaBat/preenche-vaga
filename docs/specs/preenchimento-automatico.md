@@ -27,8 +27,9 @@ cruzar a fronteira.
   *Cadastro*).
 - *Preenchimento* **consulta** o Mapeamento (`MAPEAMENTO_CAMPOS`), mas nunca
   cria Sinônimos (isso é papel do *Mapeamento de Sites*).
-- Nenhum contexto tem permissão para **Enviar** a candidatura. Enviar é ato
-  exclusivo da Candidata.
+- Nenhum contexto **da extensão** tem permissão para **Enviar** a candidatura. Enviar é ato
+  exclusivo da Candidata. (O `pipeline/` é outro produto, fora da extensão, e tem autorização
+  controlada por `AUTO_SUBMIT`: veja `pipeline-candidatura.md`.)
 - O Currículo real fica só em `chrome.storage.local` (neste navegador), nunca
   no repositório. O *Cadastro* entrega o Currículo ao *Preenchimento* só quando
   a Candidata clica em "Preencher esta página". Não há preenchimento automático
@@ -152,4 +153,4 @@ Funcionalidade: Preenchimento automático de candidatura
 ## 7. Fora do escopo
 
 - Importar currículo em PDF ou fotografado (só .docx por enquanto), CAPTCHA, senha e aceite de termos.
-- **Enviar candidaturas automaticamente.** Hoje a Candidata sempre revisa e envia (R1). Uma automação de envio é uma mudança de regra: exige nova decisão e nova spec, e precisa respeitar os termos de uso de cada Site de Vagas.
+- **Enviar candidaturas automaticamente, pela extensão.** A extensão sempre deixa a Candidata revisar e enviar (R1). O envio automatizado existe só no contexto separado `pipeline/`, com `AUTO_SUBMIT` e regras próprias: veja `pipeline-candidatura.md`.

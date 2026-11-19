@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "build": "node scripts/build.js",
     "test": "node --test \"tests/**/*.test.js\"",
+    "pipeline": "node pipeline/cli.js",
     "agents:sync": "node scripts/sincronizar-agentes.js"
   },
   "devDependencies": {
