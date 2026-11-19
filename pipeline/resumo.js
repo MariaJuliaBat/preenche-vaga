@@ -14,6 +14,9 @@
  * @property {{ conector: string, foco: string, erro: string }[]} falhasConectores
  * @property {boolean} segundaBusca o Radar precisou da segunda busca focada no DF
  * @property {number} gravadasNaPlanilha
+ * @property {{ titulo: string, arquivo: string, avisos: string[] }[]} curriculos PDFs sob medida gerados
+ * @property {{ titulo: string, erro: string }[]} falhasCurriculo vagas cujo currículo não foi gerado
+ * @property {string[]} avisosPerfil avisos do Perfil (Ancoragem, Perfil indisponível etc.)
  * @property {string[]} etapasNaoImplementadas
  */
 
@@ -31,6 +34,9 @@ const resultadoVazio = () => ({
   falhasConectores: [],
   segundaBusca: false,
   gravadasNaPlanilha: 0,
+  curriculos: [],
+  falhasCurriculo: [],
+  avisosPerfil: [],
   etapasNaoImplementadas: []
 });
 
@@ -73,6 +79,15 @@ function formatarResumo(r, modo) {
   for (const f of r.falhasConectores) linhas.push(`Falha no Conector ${f.conector} (busca ${f.foco}): ${f.erro}`);
   for (const alerta of r.alertasFormacao) linhas.push(`Alerta de formação — ${alerta}`);
   for (const pista of r.pistas) linhas.push(`  pista: ${pista.titulo || pista.url || "(sem título)"} — ${pista.motivo || ""}`);
+  if (r.curriculos.length > 0 || r.falhasCurriculo.length > 0) {
+    linhas.push(`Currículos sob medida gerados: ${r.curriculos.length}`);
+    for (const c of r.curriculos) {
+      linhas.push(`  - ${c.titulo} → ${c.arquivo}`);
+      for (const aviso of c.avisos) linhas.push(`      aviso: ${aviso}`);
+    }
+    for (const falha of r.falhasCurriculo) linhas.push(`Falha ao gerar currículo para "${falha.titulo}": ${falha.erro}`);
+  }
+  for (const aviso of r.avisosPerfil) linhas.push(`Aviso do Perfil: ${aviso}`);
   for (const nome of r.etapasNaoImplementadas) linhas.push(`Etapa ainda não implementada: ${nome}`);
   return linhas.join("\n");
 }

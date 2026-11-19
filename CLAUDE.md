@@ -19,7 +19,7 @@ candidaturas, e só com `AUTO_SUBMIT=true` fora do `--dry-run`. Spec: docs/specs
 - manifest.json
 - popup/ — tela onde a pessoa cadastra o currículo (digitando ou importando um .docx em popup/importar-docx.js)
 - content/ — script que encontra e preenche os campos da página
-- pipeline/ — CLI Node.js (config, logs, resumo; radar, currículo e candidatura nos próximos passos). Reaproveita content/mapeamento.js
+- pipeline/ — CLI Node.js (config, logs, resumo, sheets, radar/, perfil/, curriculo/; candidatura no próximo passo). Reaproveita content/mapeamento.js
 - paginas-teste/ — formulários falsos para testar sem usar sites reais
 
 ## Convenções

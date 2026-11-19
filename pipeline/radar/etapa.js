@@ -2,10 +2,15 @@
 // Com --dry-run (config.escreverPlanilha=false) lê a planilha para deduplicar, mas não escreve nada (RD22).
 const { extrairIdGoogle } = require("../config");
 const { criarClienteSheets, lerVagas, registrarVagas } = require("../sheets");
+const { lerTextoDoc } = require("../google-docs");
+const { criarLlm } = require("../llm");
+const { obterPerfil, perfilParaRadar } = require("../perfil");
+const { salvarLote } = require("../lote-arquivo");
 const { executarRadar } = require("./index");
 const { criarConectoresGithub } = require("./conectores/github");
 
 const ROTULO = { remoto: "Remoto", hibrido: "Híbrido", presencial: "Presencial" };
+const MAX_DESCRICAO_SALVA = 6000;
 
 /**
  * @param {import("./index").Aprovada} a
@@ -26,7 +31,37 @@ function paraVagaDaPlanilha(a) {
 }
 
 /**
- * @param {{ conectores?: import("./tipos").Conector[], clienteSheets?: ReturnType<typeof criarClienteSheets>, hoje?: Date }} [deps] injeção para testes
+ * PF7: com o Doc e a chave do LLM configurados, a stack e a formação vêm do Perfil; senão, ou se falhar, do RADAR_STACK.
+ * @param {any} config
+ * @param {any} resultado
+ * @param {{ perfil?: import("./tipos").Perfil, llm?: import("../llm").Llm, lerTexto?: () => Promise<string> }} deps
+ * @returns {Promise<import("./tipos").Perfil>}
+ */
+async function carregarPerfil(config, resultado, deps) {
+  if (deps.perfil) return deps.perfil;
+  const provisorio = { habilidades: config.radar.stack, formacao: null };
+
+  if (!config.googleDocCvBaseUrl || !config.anthropicApiKey) {
+    resultado.avisosPerfil.push("Sem Perfil: defina GOOGLE_DOC_CV_BASE_URL e ANTHROPIC_API_KEY. Usei RADAR_STACK e formação não informada.");
+    return provisorio;
+  }
+  try {
+    const { perfil, avisos } = await obterPerfil({
+      lerTexto: deps.lerTexto || (() => lerTextoDoc({ docId: extrairIdGoogle(config.googleDocCvBaseUrl), contaDeServico: config.contaDeServico })),
+      llm: deps.llm || (() => criarLlm({ apiKey: config.anthropicApiKey, modelo: config.anthropicModel || undefined })),
+      pastaSaida: config.pastas.saida
+    });
+    resultado.avisosPerfil.push(...avisos);
+    return perfilParaRadar(perfil);
+  } catch (erro) {
+    resultado.avisosPerfil.push(`Perfil indisponível (${erro instanceof Error ? erro.message : String(erro)}). Usei RADAR_STACK e formação não informada.`);
+    return provisorio;
+  }
+}
+
+/**
+ * @param {{ conectores?: import("./tipos").Conector[], clienteSheets?: ReturnType<typeof criarClienteSheets>, hoje?: Date,
+ *   perfil?: import("./tipos").Perfil, llm?: import("../llm").Llm, lerTexto?: () => Promise<string> }} [deps] injeção para testes
  */
 function criarEtapaRadar(deps = {}) {
   return async function etapaRadar(/** @type {{ config: any, resultado: any, logs: any }} */ { config, resultado, logs }) {
@@ -36,8 +71,7 @@ function criarEtapaRadar(deps = {}) {
       || criarConectoresGithub({ repos: config.radar.reposGithub, token: config.radar.githubToken });
 
     const { urlsExistentes } = await lerVagas(cliente, planilhaId);
-    // O Perfil (P18) ainda não existe: a stack vem do .env e a formação fica "não informada".
-    const perfil = { habilidades: config.radar.stack, formacao: null };
+    const perfil = await carregarPerfil(config, resultado, deps);
 
     const r = await executarRadar({
       conectores,
@@ -59,8 +93,10 @@ function criarEtapaRadar(deps = {}) {
     resultado.emBrasilia = r.emDF;
     resultado.remotas = r.lote.length - r.emDF;
     resultado.aprovadas = r.lote.map((a) => ({
-      titulo: a.vaga.titulo, empresa: a.vaga.empresa || "", url: a.vaga.url, ehVagaDF: a.ehVagaDF, pontos: a.pontos
+      titulo: a.vaga.titulo, empresa: a.vaga.empresa || "", url: a.vaga.url, ehVagaDF: a.ehVagaDF, pontos: a.pontos,
+      descricao: String(a.vaga.descricao || "").slice(0, MAX_DESCRICAO_SALVA)
     }));
+    salvarLote(config, resultado.aprovadas);
     resultado.alertasFormacao = r.lote.flatMap((a) => a.alertas.map((alerta) => `${a.vaga.titulo}: ${alerta}`));
     resultado.falhasConectores = r.falhas;
     resultado.segundaBusca = r.segundaBusca;

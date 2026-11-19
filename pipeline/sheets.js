@@ -1,7 +1,7 @@
 // Módulo 1 e 5: leitura, deduplicação e escrita na Planilha de Controle (Google Sheets, aba "Vagas").
 // Fala com a API REST do Sheets via fetch, autenticando com a Service Account. O cliente é injetável,
 // então os testes usam um cliente falso e nunca tocam na rede.
-const { readFileSync } = require("node:fs");
+const { criarObterToken } = require("./google-auth");
 const { PLANILHA } = require("./config");
 
 const ESCOPO = "https://www.googleapis.com/auth/spreadsheets";
@@ -45,18 +45,7 @@ const intervalo = (aba, de, ate) => `'${aba.replace(/'/g, "''")}'!${de}:${ate}`;
  */
 function criarClienteSheets(opcoes) {
   const fetchImpl = opcoes.fetchImpl || fetch;
-  let auth;
-  const obterToken = opcoes.obterToken || (async () => {
-    if (!auth) {
-      // JWT direto: `keyFile`/`credentials` do GoogleAuth estão obsoletos e imprimem aviso.
-      const { JWT } = require("google-auth-library");
-      const chave = JSON.parse(readFileSync(opcoes.contaDeServico, "utf8"));
-      auth = new JWT({ email: chave.client_email, key: chave.private_key, scopes: [ESCOPO] });
-    }
-    const { token } = await auth.getAccessToken();
-    if (!token) throw new Error("Não consegui obter token do Google com a Service Account.");
-    return token;
-  });
+  const obterToken = opcoes.obterToken || criarObterToken(String(opcoes.contaDeServico), ESCOPO);
 
   /** @param {string} metodo @param {string} caminho @param {unknown} [corpo] */
   const chamar = async (metodo, caminho, corpo) => {
