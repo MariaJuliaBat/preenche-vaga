@@ -1,6 +1,7 @@
 // Módulo 1 e 5: leitura, deduplicação e escrita na Planilha de Controle (Google Sheets, aba "Vagas").
 // Fala com a API REST do Sheets via fetch, autenticando com a Service Account. O cliente é injetável,
 // então os testes usam um cliente falso e nunca tocam na rede.
+const { readFileSync } = require("node:fs");
 const { PLANILHA } = require("./config");
 
 const ESCOPO = "https://www.googleapis.com/auth/spreadsheets";
@@ -47,10 +48,12 @@ function criarClienteSheets(opcoes) {
   let auth;
   const obterToken = opcoes.obterToken || (async () => {
     if (!auth) {
-      const { GoogleAuth } = require("google-auth-library");
-      auth = new GoogleAuth({ keyFile: opcoes.contaDeServico, scopes: [ESCOPO] });
+      // JWT direto: `keyFile`/`credentials` do GoogleAuth estão obsoletos e imprimem aviso.
+      const { JWT } = require("google-auth-library");
+      const chave = JSON.parse(readFileSync(opcoes.contaDeServico, "utf8"));
+      auth = new JWT({ email: chave.client_email, key: chave.private_key, scopes: [ESCOPO] });
     }
-    const token = await auth.getAccessToken();
+    const { token } = await auth.getAccessToken();
     if (!token) throw new Error("Não consegui obter token do Google com a Service Account.");
     return token;
   });
@@ -94,7 +97,8 @@ function criarClienteSheets(opcoes) {
 /** @typedef {ReturnType<typeof criarClienteSheets>} ClienteSheets */
 
 /**
- * Lê a aba "Vagas": URLs existentes (coluna C), último número (coluna A) e primeira linha vazia.
+ * Lê a aba "Vagas": URLs existentes (coluna C), último número (coluna A) e as linhas livres.
+ * Linha livre = coluna C ("Link da vaga") vazia, mesmo que a coluna A já venha pré-numerada.
  * Recusa trabalhar se o cabeçalho da linha 4 não parecer o esperado, para não escrever na aba errada.
  * @param {ClienteSheets} cliente
  * @param {string} planilhaId
@@ -113,24 +117,25 @@ async function lerVagas(cliente, planilhaId) {
   const linhas = await cliente.obterValores(planilhaId, intervalo(aba, `A${primeiraLinhaDeVaga}`, "L"));
   const urlsExistentes = new Set();
   let ultimoNumero = 0;
-  let primeiraVazia = -1;
+  /** @type {{ linha: number, numero: number | null }[]} */
+  const livres = [];
 
   linhas.forEach((linha, i) => {
-    const [numero = "", titulo = "", link = ""] = linha;
-    if (!String(numero).trim() && !String(titulo).trim() && !String(link).trim()) {
-      if (primeiraVazia === -1) primeiraVazia = i;
-      return;
-    }
+    const [numero = "", , link = ""] = linha;
     const n = Number.parseInt(String(numero).trim(), 10);
     if (Number.isFinite(n) && n > ultimoNumero) ultimoNumero = n;
     const url = normalizarUrl(link);
     if (url) urlsExistentes.add(url);
+    else livres.push({ linha: primeiraLinhaDeVaga + i, numero: Number.isFinite(n) ? n : null });
   });
 
   return {
     urlsExistentes,
     ultimoNumero,
-    proximaLinha: primeiraLinhaDeVaga + (primeiraVazia === -1 ? linhas.length : primeiraVazia)
+    livres,
+    // Depois das linhas lidas, para quando as livres acabarem.
+    linhaAposDados: primeiraLinhaDeVaga + linhas.length,
+    proximaLinha: livres.length > 0 ? livres[0].linha : primeiraLinhaDeVaga + linhas.length
   };
 }
 
@@ -172,14 +177,16 @@ function montarLinha(vaga, numero) {
 }
 
 /**
- * Registra vagas na planilha: descarta as que já existem (ou repetidas no lote), numera a partir do
- * último número e escreve na primeira linha vazia. Com escreverPlanilha=false (--dry-run) não escreve.
+ * Registra vagas na planilha: descarta as que já existem (ou repetidas no lote) e preenche, em ordem, as linhas
+ * com a coluna C vazia (a partir da 5). Se a coluna A já veio pré-numerada, mantém o número dela (e não a reescreve,
+ * para não quebrar fórmula); senão usa o próximo número depois do maior existente.
+ * Com escreverPlanilha=false (--dry-run) não escreve.
  * @param {ClienteSheets} cliente
  * @param {{ planilhaId: string, escreverPlanilha: boolean }} opcoes
  * @param {Vaga[]} vagas
  */
 async function registrarVagas(cliente, opcoes, vagas) {
-  const { urlsExistentes, ultimoNumero, proximaLinha } = await lerVagas(cliente, opcoes.planilhaId);
+  const { urlsExistentes, ultimoNumero, livres, linhaAposDados, proximaLinha } = await lerVagas(cliente, opcoes.planilhaId);
 
   const vistas = new Set(urlsExistentes);
   const novas = [];
@@ -194,16 +201,28 @@ async function registrarVagas(cliente, opcoes, vagas) {
     novas.push(vaga);
   }
 
-  const linhas = novas.map((vaga, i) => montarLinha(vaga, ultimoNumero + 1 + i));
+  let proximoNumero = ultimoNumero;
+  const destinos = novas.map((vaga, i) => {
+    const espaco = livres[i] || { linha: linhaAposDados + (i - livres.length), numero: null };
+    const preNumerada = espaco.numero !== null;
+    const numero = preNumerada ? /** @type {number} */ (espaco.numero) : ++proximoNumero;
+    return { linha: espaco.linha, preNumerada, valores: montarLinha(vaga, numero) };
+  });
+
+  const linhas = destinos.map((d) => d.valores);
   const resultado = { escritas: linhas.length, duplicadas, linhaInicial: proximaLinha, linhas, gravado: false };
   if (linhas.length === 0 || !opcoes.escreverPlanilha) return resultado;
 
   const { aba } = PLANILHA;
-  await cliente.escreverValores(
-    opcoes.planilhaId,
-    intervalo(aba, `A${proximaLinha}`, `L${proximaLinha + linhas.length - 1}`),
-    linhas
-  );
+  for (const d of destinos) {
+    // Pré-numerada: grava só B..L, preservando a coluna A como está na planilha.
+    const de = d.preNumerada ? "B" : "A";
+    await cliente.escreverValores(
+      opcoes.planilhaId,
+      intervalo(aba, `${de}${d.linha}`, `L${d.linha}`),
+      [d.preNumerada ? d.valores.slice(1) : d.valores]
+    );
+  }
   return { ...resultado, gravado: true };
 }
 

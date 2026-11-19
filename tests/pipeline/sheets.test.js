@@ -41,7 +41,7 @@ test("lerVagas acha URLs, último número e primeira linha vazia", async () => {
   ]);
   const lido = await lerVagas(cliente, "ID");
   assert.strictEqual(lido.ultimoNumero, 8);
-  assert.strictEqual(lido.proximaLinha, 5 + 3);
+  assert.strictEqual(lido.proximaLinha, 5 + 3); // a linha vazia no meio
   assert.ok(lido.urlsExistentes.has("https://x.exemplo/1"));
   assert.strictEqual(lido.urlsExistentes.size, 4);
 });
@@ -51,6 +51,29 @@ test("lerVagas: sem linha vazia, escreve depois da última; planilha sem vagas c
   const vazio = await lerVagas(clienteFalso([]), "ID");
   assert.strictEqual(vazio.proximaLinha, 5);
   assert.strictEqual(vazio.ultimoNumero, 0);
+});
+
+test("linha livre = primeira com Link vazio, mesmo com coluna A pré-numerada", async () => {
+  const cliente = clienteFalso([
+    ["1", "A", "https://x.exemplo/1"],
+    ["2", "", ""],
+    ["3", "", ""],
+    ["4", "B", "https://x.exemplo/4"]
+  ]);
+  const lido = await lerVagas(cliente, "ID");
+  assert.strictEqual(lido.proximaLinha, 6);
+  assert.deepStrictEqual(lido.livres.map((l) => l.numero), [2, 3]);
+});
+
+test("registrarVagas usa o número pré-numerado, grava só B:L nele e continua depois do fim", async () => {
+  const cliente = clienteFalso([["1", "A", "https://x.exemplo/1"], ["2", "", ""], ["3", "", ""]]);
+  const vagas = [1, 2, 3].map((n) => ({ ...VAGA, url: `https://gupy.exemplo/vaga/${n}` }));
+  await registrarVagas(cliente, { planilhaId: "ID", escreverPlanilha: true }, vagas);
+
+  assert.deepStrictEqual(cliente.escritas.map((e) => e.faixa), ["'Vagas'!B6:L6", "'Vagas'!B7:L7", "'Vagas'!A8:L8"]);
+  assert.strictEqual(cliente.escritas[0].valores[0].length, 11);
+  assert.strictEqual(cliente.escritas[0].valores[0][1], "https://gupy.exemplo/vaga/1");
+  assert.strictEqual(cliente.escritas[2].valores[0][0], 4);
 });
 
 test("recusa planilha cuja linha 4 não é o cabeçalho esperado", async () => {
@@ -87,7 +110,7 @@ test("registrarVagas numera, escreve na primeira linha vazia e descarta duplicad
   assert.strictEqual(r.gravado, true);
   assert.strictEqual(cliente.escritas.length, 1);
   assert.strictEqual(cliente.escritas[0].faixa, "'Vagas'!A7:L7");
-  assert.strictEqual(cliente.escritas[0].valores[0][0], 5);
+  assert.strictEqual(cliente.escritas[0].valores[0][0], 5); // sem pré-numeração: maior + 1
   assert.strictEqual(cliente.escritas[0].valores[0][2], "https://gupy.exemplo/vaga/2");
 });
 
