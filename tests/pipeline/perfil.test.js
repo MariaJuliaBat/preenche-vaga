@@ -169,3 +169,70 @@ test("PF7: o Perfil entrega ao Radar as habilidades e o grau da formação em an
   assert.strictEqual(p.formacao.grau, "Licenciatura");
   assert.strictEqual(perfilParaRadar({ ...PERFIL, formacao: [] }).formacao, null);
 });
+
+// ---- Formato C: o estilo de um currículo real (todos os nomes fictícios) ----
+const TEXTO_C = `MARIA EXEMPLO
+maria.exemplo@exemplo.com | (61) 99999-0000 | Brasília - DF
+
+RESUMO
+Texto de apresentação que o Pipeline não usa.
+
+EDUCAÇÃO
+Graduação em Computação (Licenciatura) – Universidade Exemplo (UEx) | Mar/2025 – Atual
+Técnico em Desenvolvimento Web (400h) – Escola Exemplo | Jul/2024 – Dez/2024
+• Tecnologias: HTML, CSS e JavaScript.
+• Projeto final em equipe; participação em feira de ciências.
+Formação em Back-end – Plataforma Exemplo | Jan/2025 – Atual
+
+EXPERIÊNCIA PROFISSIONAL
+Estagiária - Acme Exemplo - 2024 - 2025
+- Criei telas em React.
+
+HABILIDADES TÉCNICAS
+• Linguagens: JavaScript, Python, C++
+• Práticas: Git; testes automatizados (Jest, Vitest)
+• Idiomas: Português (nativo); Inglês (avançado, leitura e escrita); Espanhol (básico)
+
+FERRAMENTAS
+• Figma, Docker
+
+CURSOS E CERTIFICAÇÕES
+Curso de Exemplo – Plataforma Exemplo | 2024
+`;
+
+test("idiomas: vírgula dentro de parênteses não quebra o item", () => {
+  const { perfil } = parsearPerfil(TEXTO_C);
+  assert.deepStrictEqual(perfil.habilidades.idiomas, ["Português (nativo)", "Inglês (avançado, leitura e escrita)", "Espanhol (básico)"]);
+});
+
+test("habilidades: parênteses com vírgula ficam inteiros e 'Ferramentas' é um título de habilidades", () => {
+  const { perfil } = parsearPerfil(TEXTO_C);
+  assert.ok(perfil.habilidades.tecnicas.includes("testes automatizados (Jest, Vitest)"));
+  assert.ok(perfil.habilidades.tecnicas.includes("C++"));
+  assert.ok(perfil.habilidades.tecnicas.includes("Figma") && perfil.habilidades.tecnicas.includes("Docker"));
+  assert.ok(!perfil.habilidades.idiomas.some((i) => /Figma|Docker|Curso/.test(i)));
+});
+
+test("formação: cada linha datada é uma formação; tópicos com marcador não viram formação; grau específico entre parênteses", () => {
+  const { perfil } = parsearPerfil(TEXTO_C);
+  assert.strictEqual(perfil.formacao.length, 3);
+  assert.deepStrictEqual(perfil.formacao[0], {
+    instituicao: "Universidade Exemplo", curso: "Computação", grau: "Licenciatura", status: "Atual", previsaoConclusao: null
+  });
+  assert.strictEqual(perfil.formacao[1].grau, "Técnico");
+  assert.strictEqual(perfil.formacao[1].instituicao, "Escola Exemplo");
+  assert.strictEqual(perfil.formacao[2].instituicao, "Plataforma Exemplo"); // sem a palavra "Universidade": sobrou depois do curso
+  assert.strictEqual(perfil.formacao[2].curso, "Formação em Back-end");
+});
+
+test("o grau da formação principal chega ao Radar como Licenciatura", () => {
+  const { perfil } = extrairPerfil(TEXTO_C);
+  assert.strictEqual(perfilParaRadar(perfil).formacao.grau, "Licenciatura");
+});
+
+test("título desconhecido em maiúsculas encerra Idiomas/Habilidades em vez de virar item", () => {
+  const texto = TEXTO_A.replace("Idiomas: Inglês intermediário\n", "Idiomas: Inglês intermediário\n\nOUTRAS INFORMAÇÕES\nDisponibilidade para viagens\n");
+  const { perfil } = parsearPerfil(texto);
+  assert.deepStrictEqual(perfil.habilidades.idiomas, ["Inglês intermediário"]);
+  assert.ok(!perfil.habilidades.tecnicas.includes("Disponibilidade para viagens"));
+});

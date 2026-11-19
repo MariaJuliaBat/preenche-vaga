@@ -17,7 +17,10 @@
  * @property {{ titulo: string, arquivo: string, avisos: string[], palavrasChave?: { casadas: string[], lacunas: string[] } }[]} curriculos PDFs sob medida gerados
  * @property {{ formacoes: number, experiencias: number, projetos: number, habilidades: number, idiomas: number } | null} perfilLido o que o parser leu do Currículo Base (só contagens)
  * @property {{ titulo: string, erro: string }[]} falhasCurriculo vagas cujo currículo não foi gerado
+ * @property {string} fonteDasVagas de onde a Etapa curriculo tirou as vagas (Radar, planilha ou lote salvo)
+ * @property {number} marcadasNaPlanilha linhas da planilha marcadas com "CV gerado"
  * @property {string[]} avisosPerfil avisos do Perfil (Ancoragem, Perfil indisponível etc.)
+ * @property {string[]} etapasRodadas etapas que rodaram nesta execução (o resumo só mostra o bloco do Radar se ele rodou)
  * @property {string[]} etapasNaoImplementadas
  */
 
@@ -37,8 +40,11 @@ const resultadoVazio = () => ({
   gravadasNaPlanilha: 0,
   curriculos: [],
   perfilLido: null,
+  fonteDasVagas: "",
+  marcadasNaPlanilha: 0,
   falhasCurriculo: [],
   avisosPerfil: [],
+  etapasRodadas: [],
   etapasNaoImplementadas: []
 });
 
@@ -56,26 +62,34 @@ function contarPorMotivo(descartes) {
 /** @param {ResultadoDaExecucao} r @param {{ dryRun: boolean, enviarCandidatura: boolean }} modo */
 function formatarResumo(r, modo) {
   const percentual = r.encontradas > 0 ? Math.round((r.emBrasilia / r.encontradas) * 100) : 0;
+  // Sem lista de etapas (chamada direta), mostra tudo; com ela, o bloco do Radar só aparece se o Radar rodou.
+  const mostraRadar = r.etapasRodadas.length === 0 || r.etapasRodadas.includes("radar");
   const linhas = [
     "",
     "=== Resumo da execução ===",
-    `Modo: ${modo.dryRun ? "dry-run (nada enviado, nada escrito na planilha)" : modo.enviarCandidatura ? "AUTO_SUBMIT ligado" : "AUTO_SUBMIT desligado (preenche, não envia)"}`,
-    `Vagas aprovadas pelo Radar: ${r.encontradas}`,
-    `  Brasília - DF (presencial/híbrida): ${r.emBrasilia} (${percentual}%)`,
-    `  Remotas: ${r.remotas}`
+    `Modo: ${modo.dryRun ? "dry-run (nada enviado, nada escrito na planilha)" : modo.enviarCandidatura ? "AUTO_SUBMIT ligado" : "AUTO_SUBMIT desligado (preenche, não envia)"}`
   ];
-  for (const a of r.aprovadas) {
+  if (mostraRadar) {
+    linhas.push(
+      `Vagas aprovadas pelo Radar: ${r.encontradas}`,
+      `  Brasília - DF (presencial/híbrida): ${r.emBrasilia} (${percentual}%)`,
+      `  Remotas: ${r.remotas}`
+    );
+  }
+  for (const a of mostraRadar ? r.aprovadas : []) {
     linhas.push(`  - ${a.titulo}${a.empresa ? ` (${a.empresa})` : ""} — ${a.ehVagaDF ? "Brasília - DF" : "Remota"}, ${a.pontos} pts`);
   }
-  if (r.segundaBusca) linhas.push("  (segunda busca focada em Brasília - DF foi necessária)");
-  linhas.push(
-    `Linhas gravadas na planilha: ${r.gravadasNaPlanilha}`,
-    `Candidaturas enviadas: ${r.enviadas}`,
-    `Pendências (precisam de você): ${r.pendencias}`,
-    `Pistas para revisão manual: ${r.pistas.length}`,
-    `Vagas descartadas: ${r.descartes.length}${r.descartes.length > 0 ? ` (${contarPorMotivo(r.descartes)})` : ""}`
-  );
-  if (r.encontradas > 0 && percentual < 50) {
+  if (mostraRadar && r.segundaBusca) linhas.push("  (segunda busca focada em Brasília - DF foi necessária)");
+  if (mostraRadar) {
+    linhas.push(
+      `Linhas gravadas na planilha: ${r.gravadasNaPlanilha}`,
+      `Candidaturas enviadas: ${r.enviadas}`,
+      `Pendências (precisam de você): ${r.pendencias}`,
+      `Pistas para revisão manual: ${r.pistas.length}`,
+      `Vagas descartadas: ${r.descartes.length}${r.descartes.length > 0 ? ` (${contarPorMotivo(r.descartes)})` : ""}`
+    );
+  }
+  if (mostraRadar && r.encontradas > 0 && percentual < 50) {
     linhas.push("ATENÇÃO: abaixo de 50% DF: menos de 50% das vagas são de Brasília - DF (nenhuma vaga presencial de outra cidade foi incluída).");
   }
   for (const f of r.falhasConectores) linhas.push(`Falha no Conector ${f.conector} (busca ${f.foco}): ${f.erro}`);
@@ -86,7 +100,8 @@ function formatarResumo(r, modo) {
     linhas.push(`Perfil lido do Currículo Base: ${p.formacoes} formação(ões), ${p.experiencias} experiência(s), ${p.projetos} projeto(s), ${p.habilidades} habilidade(s), ${p.idiomas} idioma(s)`);
   }
   if (r.curriculos.length > 0 || r.falhasCurriculo.length > 0) {
-    linhas.push(`Currículos sob medida gerados: ${r.curriculos.length}`);
+    linhas.push(`Currículos sob medida gerados: ${r.curriculos.length}${r.fonteDasVagas ? ` (vagas: ${r.fonteDasVagas})` : ""}`);
+    if (r.marcadasNaPlanilha > 0) linhas.push(`Linhas da planilha marcadas como "CV gerado": ${r.marcadasNaPlanilha}`);
     for (const c of r.curriculos) {
       linhas.push(`  - ${c.titulo} → ${c.arquivo}`);
       if (c.palavrasChave) linhas.push(`      palavras-chave da vaga que você tem: ${c.palavrasChave.casadas.join(", ") || "(nenhuma)"}`);

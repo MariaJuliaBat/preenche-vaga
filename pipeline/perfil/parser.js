@@ -8,10 +8,14 @@ const TITULOS_DE_SECAO = {
   formacao: ["formacao", "formacao academica", "educacao", "escolaridade", "academico", "formacao e cursos"],
   experiencia: ["experiencia", "experiencias", "experiencia profissional", "experiencias profissionais", "historico profissional", "experiencia de trabalho", "estagios"],
   projetos: ["projetos", "projeto", "projetos pessoais", "projetos academicos", "projetos de destaque"],
-  habilidades: ["habilidades", "habilidades tecnicas", "competencias", "competencias tecnicas", "skills", "tecnologias", "conhecimentos", "conhecimentos tecnicos", "stack"],
+  habilidades: ["habilidades", "habilidades tecnicas", "competencias", "competencias tecnicas", "skills", "tecnologias", "conhecimentos", "conhecimentos tecnicos", "stack",
+    "ferramentas", "ferramentas e tecnologias", "linguagens", "linguagens e frameworks"],
   idiomas: ["idiomas", "linguas"],
+  // Seções que o Pipeline não usa: reconhecer o título evita que as linhas dela caiam na seção anterior (ex.: Idiomas).
   ignorar: ["resumo", "resumo profissional", "objetivo", "sobre", "sobre mim", "perfil", "perfil profissional", "contato", "contatos", "dados pessoais",
-    "cursos", "certificacoes", "certificados", "cursos e certificacoes", "atividades extracurriculares", "voluntariado", "referencias", "premios"]
+    "cursos", "certificacoes", "certificados", "cursos e certificacoes", "certificacoes e cursos", "licencas e certificacoes", "cursos complementares",
+    "formacao complementar", "atividades extracurriculares", "atividades", "voluntariado", "referencias", "premios", "conquistas", "premios e conquistas",
+    "soft skills", "habilidades comportamentais", "competencias comportamentais", "links", "redes sociais", "interesses", "hobbies", "publicacoes", "portfolio"]
 };
 
 const UFS = new Set("AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" "));
@@ -38,13 +42,36 @@ function tituloDeSecao(linha) {
 /** @param {string} linha */
 const semMarcador = (linha) => linha.replace(BULLET, "").trim();
 
+/**
+ * Divide em vírgula, ponto e vírgula, barra vertical e marcadores, mas só FORA de parênteses:
+ * "Inglês (avançado, certificado); Espanhol" vira dois itens, não três.
+ * @param {string} valor
+ */
+function dividirLista(valor) {
+  /** @type {string[]} */
+  const itens = [];
+  let atual = "";
+  let nivel = 0;
+  for (const c of valor) {
+    if (c === "(") nivel += 1;
+    else if (c === ")") nivel = Math.max(0, nivel - 1);
+    if (nivel === 0 && ",;|•·".includes(c)) {
+      itens.push(atual);
+      atual = "";
+    } else {
+      atual += c;
+    }
+  }
+  itens.push(atual);
+  return itens.map((s) => s.trim().replace(/\.$/, "")).filter((s) => s.length > 0 && s.length <= 70);
+}
+
 /** Separa "Rótulo: a, b, c" em rótulo e lista. @param {string} linha */
 function rotuloELista(linha) {
   const m = /^([^:]{2,40}):\s*(.+)$/.exec(linha);
   const rotulo = m ? normalizar(m[1]) : "";
   const valor = m ? m[2] : linha;
-  const itens = valor.split(/[,;|•·]/).map((s) => s.trim().replace(/\.$/, "")).filter((s) => s.length > 0 && s.length <= 40);
-  return { rotulo, itens };
+  return { rotulo, itens: dividirLista(valor) };
 }
 
 /** @param {string} linha @returns {{ periodo: string | null, resto: string, fim: string | null }} */
@@ -77,7 +104,7 @@ function parsearItens(linhas, tipo) {
     const tecnologias = /^(?:tecnologias|stack|ferramentas|tecnologias utilizadas)\s*:\s*(.+)$/i.exec(semMarcador(linha));
 
     if (tecnologias && atual) {
-      atual.tecnologias.push(...tecnologias[1].split(/[,;|•·]/).map((s) => s.trim().replace(/\.$/, "")).filter(Boolean));
+      atual.tecnologias.push(...dividirLista(tecnologias[1]));
     } else if (BULLET.test(linha) && atual) {
       atual.descricao.push(semMarcador(linha));
     } else if (atual && (linha.length > 110 || /[.!?]$/.test(linha))) {
@@ -97,8 +124,13 @@ function parsearItens(linhas, tipo) {
   return itens;
 }
 
-/** @param {string} linha */
-function parsearLinhaDeFormacao(linha) {
+const GRAU_ESPECIFICO = /\b(licenciatura|bacharelado|bacharel|tecn[oó]logo|tecnologia)\b/i;
+
+/**
+ * Lê uma linha de formação. Devolve os campos e se a linha tem período (cada linha datada é uma formação própria).
+ * @param {string} linha
+ */
+function lerLinhaDeFormacao(linha) {
   let texto = semMarcador(linha);
   /** @type {{ instituicao: string | null, curso: string | null, grau: string | null, status: string | null, previsaoConclusao: string | null }} */
   const f = { instituicao: null, curso: null, grau: null, status: null, previsaoConclusao: null };
@@ -114,40 +146,68 @@ function parsearLinhaDeFormacao(linha) {
     texto = texto.replace(st[0], " ");
   }
   const { periodo, resto, fim } = tirarPeriodo(texto);
-  if (!f.previsaoConclusao && periodo && fim && !/atual|presente|hoje|andamento|cursando/i.test(fim)) f.previsaoConclusao = fim;
+  if (periodo && fim) {
+    // "Jul/2025 – Atual" = em andamento (texto do próprio Doc); "2025 - 2029" = previsão de término.
+    if (/atual|presente|hoje|andamento|cursando/i.test(fim)) f.status = f.status || fim;
+    else if (!f.previsaoConclusao) f.previsaoConclusao = fim;
+  }
   texto = resto;
 
+  // Parênteses: "(Licenciatura)" especifica o grau; "(UnB)" é a sigla da instituição; "(400h)" é detalhe e fica de fora.
+  /** @type {string | null} */ let grauEspecifico = null;
+  /** @type {string | null} */ let sigla = null;
+  texto = texto.replace(/\(([^)]*)\)/g, (_, dentro) => {
+    const d = String(dentro).trim();
+    const g = GRAU_ESPECIFICO.exec(d);
+    if (g) grauEspecifico = g[1].charAt(0).toUpperCase() + g[1].slice(1);
+    else if (/^[A-Za-z]{2,8}$/.test(d) && (d.match(/[A-Z]/g) || []).length >= 2) sigla = d;
+    return " ";
+  });
+
+  /** @type {string[]} */ const sobras = [];
   for (const segmento of texto.split(SEPARADOR).map((s) => s.trim().replace(/^[-–—|,:]+|[-–—|,:]+$/g, "").trim()).filter(Boolean)) {
     const g = GRAU.exec(segmento);
     if (g && !f.grau) {
       f.grau = g[1].charAt(0).toUpperCase() + g[1].slice(1);
       const depois = segmento.slice(g.index + g[0].length).replace(/^\s*(?:em|de|da|do)\s+/i, "").trim();
       if (depois && !f.curso) f.curso = depois;
-    } else if (INSTITUICAO.test(segmento) || (!f.instituicao && /^[A-Z][A-Za-z]{1,7}$/.test(segmento) && (segmento.match(/[A-Z]/g) || []).length >= 2)) {
+    } else if (INSTITUICAO.test(segmento)) {
       if (!f.instituicao) f.instituicao = segmento;
     } else if (!f.curso) {
       f.curso = segmento;
+    } else {
+      sobras.push(segmento);
     }
   }
-  return f;
+  if (grauEspecifico) f.grau = grauEspecifico;
+  // "Curso – Instituição | período": o segmento que sobrou depois do curso é a instituição, mesmo sem a palavra "Universidade".
+  if (!f.instituicao) f.instituicao = sobras[0] || sigla;
+  return { f, periodo: Boolean(periodo) };
 }
+
+/** @param {string} linha */
+const parsearLinhaDeFormacao = (linha) => lerLinhaDeFormacao(linha).f;
 
 /** @param {string[]} linhas */
 function parsearFormacao(linhas) {
-  /** @type {ReturnType<typeof parsearLinhaDeFormacao>[]} */
+  /** @type {{ f: ReturnType<typeof parsearLinhaDeFormacao>, periodo: boolean }[]} */
   const formacoes = [];
   for (const linha of linhas) {
-    if (!linha.trim()) continue;
-    const p = parsearLinhaDeFormacao(linha);
+    if (!linha.trim() || BULLET.test(linha)) continue; // tópicos sob uma formação são detalhe, não outra formação
+    const { f: p, periodo } = lerLinhaDeFormacao(linha);
     const atual = formacoes[formacoes.length - 1];
-    const comecaNova = !atual || (p.grau && atual.grau) || (p.instituicao && atual.instituicao && atual.curso && !p.status && !p.previsaoConclusao);
-    if (comecaNova) {
-      formacoes.push(p);
+    const completa = Boolean(atual && atual.f.curso && atual.f.instituicao);
+    const temIdentidade = Boolean(p.grau || p.curso || p.instituicao);
+    // Nova formação: a anterior já está completa, ou a linha traz outro grau, ou outra linha datada.
+    const nova = !atual || (completa && temIdentidade) || Boolean(p.grau && atual.f.grau) || Boolean(periodo && atual.periodo);
+    if (nova) {
+      formacoes.push({ f: p, periodo });
     } else {
-      for (const campo of /** @type {(keyof typeof p)[]} */ (Object.keys(p))) if (p[campo] && !atual[campo]) atual[campo] = p[campo];
+      for (const campo of /** @type {(keyof typeof p)[]} */ (Object.keys(p))) if (p[campo] && !atual.f[campo]) atual.f[campo] = p[campo];
+      atual.periodo = atual.periodo || periodo;
     }
   }
-  return formacoes.filter((f) => f.instituicao || f.curso);
+  return formacoes.map((x) => x.f).filter((f) => f.instituicao || f.curso);
 }
 
 /** @param {string[]} linhasHabilidades @param {string[]} linhasIdiomas */
@@ -213,6 +273,11 @@ function parsearPerfil(texto) {
 
   for (const linha of linhas) {
     const secao = tituloDeSecao(linha);
+    // Título desconhecido TODO EM MAIÚSCULAS dentro de Idiomas ou Habilidades encerra a seção, em vez de virar item dela.
+    if (!secao && (atual === "idiomas" || atual === "habilidades") && /^[A-ZÀ-Ý][A-ZÀ-Ý &/]{4,40}$/.test(linha.trim())) {
+      atual = "ignorar";
+      continue;
+    }
     if (secao) {
       atual = secao;
       achouSecao = true;
