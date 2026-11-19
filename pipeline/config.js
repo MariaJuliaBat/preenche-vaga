@@ -89,6 +89,7 @@ function montarConfig(env, opcoes = {}) {
       ? path.resolve(RAIZ, env.GOOGLE_SERVICE_ACCOUNT_FILE)
       : "",
     anthropicApiKey: env.ANTHROPIC_API_KEY || "",
+    dadosComplementares: path.resolve(RAIZ, env.DADOS_COMPLEMENTARES_FILE || "secrets/dados-complementares.json"),
     planilha: PLANILHA,
     pastas: {
       saida,

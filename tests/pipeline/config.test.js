@@ -64,3 +64,8 @@ test("lerArquivoEnv ignora comentários e tira aspas", () => {
   assert.deepStrictEqual(lerArquivoEnv(arquivo), { A: "1", B: "dois", C: "tres" });
   assert.deepStrictEqual(lerArquivoEnv(path.join(dir, "nao-existe")), {});
 });
+
+test("Dados Complementares ficam em secrets/ (ignorado pelo Git) por padrão", () => {
+  const { dadosComplementares } = montarConfig({});
+  assert.ok(dadosComplementares.endsWith(path.join("secrets", "dados-complementares.json")));
+});
