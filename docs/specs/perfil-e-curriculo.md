@@ -46,7 +46,8 @@ Termos a evitar: "currículo" sozinho (use **Currículo Base** ou **Currículo S
 |---|---|---|
 | **PF1** | Evento | **Quando** a Etapa `curriculo` rodar, ou o Radar precisar do Perfil, o Pipeline **deve** ler o Doc de `GOOGLE_DOC_CV_BASE_URL` com a Service Account e montar o Texto do Currículo Base, incluindo a URL dos hiperlinks. |
 | **PF2** | Ubíquo | O Pipeline **deve** extrair e-mail, telefone, LinkedIn e GitHub por Extração Determinística, e o portfólio como a primeira outra URL do texto (P20). |
-| **PF3** | Ubíquo | O Pipeline **deve** dividir o texto por Títulos de Seção e ler cada item das seções Formação, Experiência, Projetos, Habilidades e Idiomas por regra; todo valor do Perfil **deve** ser um trecho do próprio Doc (Ancoragem por construção). |
+| **PF3** | Ubíquo | O Pipeline **deve** dividir o texto por Títulos de Seção e ler cada item das seções Formação, Experiência, Projetos, Habilidades e Idiomas por regra; todo valor do Perfil **deve** ser um trecho do próprio Doc (Ancoragem por construção). Títulos de seções que o Pipeline não usa (Certificações, Cursos, Soft skills...) **devem** ser reconhecidos para encerrar a seção anterior. |
+| **PF9** | Ubíquo | Listas (habilidades, idiomas, tecnologias) **devem** ser divididas por vírgula, ponto e vírgula, barra vertical e marcadores **só fora de parênteses**; em Formação, cada linha com período é uma formação própria, tópicos com marcador **não** são formações, e um grau entre parênteses (ex.: "(Licenciatura)") **deve** prevalecer sobre o grau genérico ("Graduação"). |
 | **PF4** | Ubíquo | O Perfil **deve** ser validado por schema Zod, com campo ausente como `null` e lista ausente como `[]`, nunca preenchido por suposição (P19). |
 | **PF5** | Indesejado | **Se** o Doc estiver inacessível, vazio ou sem nenhum Título de Seção, ou ficar sem nome, ou sem nenhum item, **então** o Pipeline **deve** parar a Etapa com erro claro que diz o que ajustar no Doc (P21). |
 | **PF6** | Indesejado | **Se** uma seção esperada não existir no Doc, **então** o Pipeline **deve** avisar e seguir, sem inventar o conteúdo. |
@@ -57,7 +58,7 @@ Termos a evitar: "currículo" sozinho (use **Currículo Base** ou **Currículo S
 
 | # | Padrão | Requisito |
 |---|---|---|
-| **CV1** | Evento | **Quando** a Etapa `curriculo` rodar, o Pipeline **deve** gerar um PDF ATS em `output/cvs/` para cada vaga do Lote Final (a do Radar da mesma execução ou a salva em `output/lote.json`). |
+| **CV1** | Evento | **Quando** a Etapa `curriculo` rodar, o Pipeline **deve** gerar um PDF ATS em `output/cvs/` para cada vaga que precisa de currículo: as aprovadas pelo Radar na mesma execução; senão, as linhas da aba "Vagas" com "Se candidatar" na coluna I e sem "CV gerado" na coluna K; sem planilha configurada, o último lote salvo em `output/lote.json`. |
 | **CV2** | Ubíquo | O PDF **deve** ter texto selecionável, uma coluna, fonte padrão e as seções Resumo, Experiência, Projetos, Formação, Habilidades e Idiomas, sem tabela, imagem ou ícone. |
 | **CV3** | Ubíquo | Identificação, empresas, cargos, períodos, instituições, cursos, tópicos e habilidades do PDF **devem** ser exatamente os do Perfil; o gerador **só deve** reordenar e escolher entre itens do Perfil (P12). |
 | **CV4** | Ubíquo | O gerador **deve** extrair as Palavras-chave da vaga que existem no Perfil, considerando grafias equivalentes, e **deve** ordenar experiências, projetos e tópicos pela Interseção (empate mantém a ordem do Perfil) e colocar as habilidades da vaga primeiro. |
@@ -66,6 +67,8 @@ Termos a evitar: "currículo" sozinho (use **Currículo Base** ou **Currículo S
 | **CV7** | Indesejado | **Se** a geração falhar para uma vaga, **então** o Pipeline **deve** registrar a falha no resumo, não gerar PDF parcial e seguir com as demais vagas. |
 | **CV8** | Ubíquo | O PDF **não deve** conter Dados Complementares (CPF, nascimento, gênero etc.). |
 | **CV9** | Estado | **Enquanto** `--dry-run` estiver ligado, o Pipeline **deve** gerar os PDFs normalmente (arquivos locais em `output/`), sem escrever na planilha nem enviar nada. |
+| **CV11** | Evento | **Quando** um currículo for gerado e a planilha puder ser escrita (sem `--dry-run`), o Pipeline **deve** escrever "CV gerado - aguardando revisão" na coluna K da linha da vaga, sem caminho de arquivo, para que o `--only-cv` seguinte não repita a vaga. |
+| **CV12** | Ubíquo | Para uma vaga que só tem o link na planilha, o Pipeline **deve** recuperar o texto dela do cache do Radar (`output/vagas.json`) ou, para issues do GitHub, da API pública; **se** não achar texto, **então** **deve** gerar o currículo só com o título da vaga e avisar. |
 | **CV10** | Ubíquo | O resumo impresso no terminal **deve** mostrar só contagens do Perfil (formações, experiências, projetos, habilidades, idiomas) e Palavras-chave técnicas, **nunca** nome, contatos ou texto do currículo. |
 
 ## 5. Cenários BDD
@@ -160,6 +163,24 @@ Funcionalidade: Perfil e Currículo Sob Medida
     Então a primeira e a terceira devem ter PDF
     E o resumo deve listar a falha da segunda
 
+  # Cobre PF9
+  Cenário: Parênteses e formações
+    Dado um Doc com "Idiomas: Inglês (avançado, leitura e escrita); Espanhol (básico)"
+    E a formação "Graduação em Computação (Licenciatura) – Universidade Exemplo | Mar/2025 – Atual"
+    E uma segunda linha de formação com outro período
+    Quando o Pipeline extrair o Perfil
+    Então os idiomas devem ser 2
+    E o Perfil deve ter 2 formações
+    E o grau da primeira deve ser "Licenciatura"
+
+  # Cobre CV1, CV11 e CV12
+  Cenário: --only-cv autônomo
+    Dado uma planilha com a vaga A ("Se candidatar", sem CV gerado), a vaga B ("CV gerado") e a vaga C ("Candidatura enviada")
+    Quando a Candidata rodar --only-cv sem o Radar
+    Então só a vaga A deve ganhar PDF
+    E a coluna K da vaga A deve virar "CV gerado - aguardando revisão"
+    E uma nova execução não deve gerar nenhum PDF
+
   # Cobre PF8
   Cenário: Sem chave de LLM
     Dado um .env sem ANTHROPIC_API_KEY
@@ -189,6 +210,8 @@ Funcionalidade: Perfil e Currículo Sob Medida
 | CV2, CV8 | PDF ATS... | `pipeline/curriculo/pdf.js` |
 | CV3, CV4, CV5, CV6 | Itens com mais interseção..., Grafia equivalente, Resumo..., A vaga pede... | `pipeline/curriculo/conteudo.js` |
 | CV10 | O resumo do terminal... | `pipeline/resumo.js` |
+| PF9 | Parênteses e formações | `pipeline/perfil/parser.js` (`dividirLista`, `lerLinhaDeFormacao`) |
+| CV11, CV12 | --only-cv autônomo | `pipeline/sheets.js` (`lerPendentesDeCurriculo`, `marcarCurriculoGerado`), `pipeline/curriculo/etapa.js`, `descricao.js`, `pipeline/lote-arquivo.js` |
 
 ## 7. Fora do escopo (por enquanto)
 

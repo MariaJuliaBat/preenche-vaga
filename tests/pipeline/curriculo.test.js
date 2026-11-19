@@ -10,7 +10,9 @@ const { criarEtapaCurriculo, slug } = require("../../pipeline/curriculo/etapa");
 const { criarEtapaRadar } = require("../../pipeline/radar/etapa");
 const { montarConfig } = require("../../pipeline/config");
 const { resultadoVazio, formatarResumo } = require("../../pipeline/resumo");
-const { salvarLote } = require("../../pipeline/lote-arquivo");
+const { salvarLote, lerVagaSalva } = require("../../pipeline/lote-arquivo");
+const { lerPendentesDeCurriculo, marcarCurriculoGerado, TEXTO_CV_GERADO } = require("../../pipeline/sheets");
+const { obterDescricaoDaVaga } = require("../../pipeline/curriculo/descricao");
 const logs = require("../../pipeline/logs");
 const { TEXTO_A, PERFIL, VAGA } = require("./fixtures-curriculo");
 
@@ -161,16 +163,16 @@ test("CV1, CV7 e CV9: um PDF por vaga; vaga inválida não derruba as outras; dr
   assert.ok(!resumo.includes("maria.exemplo@exemplo.com") && !resumo.includes("Maria Exemplo")); // nenhum dado pessoal no resumo
 });
 
-test("--only-cv usa o lote salvo pelo Radar; sem lote avisa", async () => {
-  const config = configTemp();
+test("--only-cv sem planilha configurada usa o último lote salvo; sem lote avisa", async () => {
+  const config = configTemp(false, { GOOGLE_SHEET_URL: "" });
   salvarLote(config, [{ titulo: "Vaga Salva", empresa: "Empresa C", url: "https://vagas.exemplo/c", descricao: "React" }]);
   const resultado = resultadoVazio();
   await criarEtapaCurriculo({ lerTexto: async () => TEXTO_A })({ config, resultado });
   assert.strictEqual(resultado.curriculos.length, 1);
 
   const vazio = resultadoVazio();
-  await criarEtapaCurriculo({ lerTexto: async () => TEXTO_A })({ config: configTemp(), resultado: vazio });
-  assert.match(vazio.avisosPerfil.join(" "), /Nenhuma vaga/);
+  await criarEtapaCurriculo({ lerTexto: async () => TEXTO_A })({ config: configTemp(false, { GOOGLE_SHEET_URL: "" }), resultado: vazio });
+  assert.match(vazio.avisosPerfil.join(" "), /Nenhuma vaga precisa de currículo/);
 });
 
 test("P21: Doc vazio ou ilegível para a Etapa curriculo com erro claro", async () => {
@@ -245,4 +247,116 @@ test("grafias equivalentes: 'Node' na vaga casa com 'Node.js' do Perfil e não v
   const { cv } = montarConteudo({ perfil: perfilComVarios(), vaga: { titulo: "x", descricao: "Experiência com Node." } });
   assert.strictEqual(cv.projetos[0].item.titulo, "Gerenciador de Tarefas");
   assert.deepStrictEqual(cv.habilidades.slice(0, 1), ["Node.js"]);
+});
+
+// ---- --only-cv autônomo: vagas vindas da planilha ----
+
+const CABECALHO = ["Nº", "Vaga", "Link da vaga", "Empresa"];
+/** Linha A..L da planilha falsa. */
+const linha = (n, titulo, url, empresa, situacao, motivo) => [String(n), titulo, url, empresa, "", "", "", "Sim", situacao, "Assim que possível", motivo, ""];
+
+/** Planilha falsa em memória: a escrita na coluna K realmente muda as linhas, como na planilha de verdade. */
+function planilhaFalsa(linhas) {
+  const escritas = [];
+  return {
+    escritas,
+    async obterValores(_id, faixa) { return /!A4:L4$/.test(faixa) ? [CABECALHO] : linhas; },
+    async escreverValores(_id, faixa, valores) {
+      escritas.push({ faixa, valores });
+      const n = Number(/K(\d+):K\d+$/.exec(faixa)[1]);
+      linhas[n - 5][10] = valores[0][0];
+    }
+  };
+}
+const PLANILHA_BASE = () => [
+  linha(1, "Vaga A", "https://vagas.exemplo/a", "Empresa A", "Se candidatar", "Radar - aguardando currículo e revisão"),
+  linha(2, "Vaga B", "https://vagas.exemplo/b", "Empresa B", "Se candidatar", TEXTO_CV_GERADO),
+  linha(3, "Vaga C", "https://vagas.exemplo/c", "Empresa C", "Candidatura enviada", "Candidatura enviada - CV adaptado"),
+  linha(4, "Vaga D", "https://vagas.exemplo/d", "Empresa D", "Se candidatar", ""),
+  linha(5, "Vaga sem link", "", "Empresa E", "Se candidatar", "")
+];
+const descricoes = { "https://vagas.exemplo/a": { descricao: "Buscamos React e Node.js." } };
+const obterDescricao = async (url) => descricoes[url] || null;
+
+test("planilha: só 'Se candidatar' com link e sem 'CV gerado' na coluna K precisam de currículo", async () => {
+  const pendentes = await lerPendentesDeCurriculo(planilhaFalsa(PLANILHA_BASE()), "ID");
+  assert.deepStrictEqual(pendentes.map((p) => [p.linha, p.titulo]), [[5, "Vaga A"], [8, "Vaga D"]]);
+});
+
+test("--only-cv busca na planilha, gera o PDF, marca 'CV gerado' na coluna K e não repete na execução seguinte", async () => {
+  const config = configTemp(false);
+  const cliente = planilhaFalsa(PLANILHA_BASE());
+  const etapa = criarEtapaCurriculo({ lerTexto: async () => TEXTO_A, clienteSheets: cliente, obterDescricao });
+
+  const r1 = resultadoVazio();
+  await etapa({ config, resultado: r1 });
+  assert.strictEqual(r1.curriculos.length, 2);
+  assert.match(r1.fonteDasVagas, /planilha/);
+  assert.strictEqual(r1.marcadasNaPlanilha, 2);
+  assert.deepStrictEqual(cliente.escritas.map((e) => e.faixa), ["'Vagas'!K5:K5", "'Vagas'!K8:K8"]);
+  assert.ok(cliente.escritas.every((e) => e.valores[0][0] === TEXTO_CV_GERADO));
+  assert.ok(r1.curriculos.every((c) => fs.existsSync(c.arquivo)));
+  // a vaga D não tem descrição conhecida: usa só o título, com aviso
+  assert.ok(r1.avisosPerfil.some((a) => /Sem descrição para "Vaga D"/.test(a)));
+  // a Vaga A tem descrição: palavras-chave do Perfil aparecem
+  assert.deepStrictEqual(r1.curriculos[0].palavrasChave.casadas, ["React", "Node.js"]);
+
+  const r2 = resultadoVazio();
+  await etapa({ config, resultado: r2 });
+  assert.strictEqual(r2.curriculos.length, 0);
+  assert.match(r2.avisosPerfil.join(" "), /Nenhuma vaga precisa de currículo/);
+});
+
+test("--only-cv --dry-run gera os PDFs da planilha mas não escreve nela", async () => {
+  const cliente = planilhaFalsa(PLANILHA_BASE());
+  const r = resultadoVazio();
+  await criarEtapaCurriculo({ lerTexto: async () => TEXTO_A, clienteSheets: cliente, obterDescricao })({ config: configTemp(true), resultado: r });
+  assert.strictEqual(r.curriculos.length, 2);
+  assert.strictEqual(cliente.escritas.length, 0);
+  assert.strictEqual(r.marcadasNaPlanilha, 0);
+});
+
+test("vagas do Radar na mesma execução têm prioridade sobre a planilha, e também marcam a coluna K", async () => {
+  const cliente = planilhaFalsa(PLANILHA_BASE());
+  const r = resultadoVazio();
+  r.aprovadas = [{ titulo: "Vaga A", empresa: "Empresa A", url: "https://vagas.exemplo/a", descricao: "React" }];
+  await criarEtapaCurriculo({ lerTexto: async () => TEXTO_A, clienteSheets: cliente, obterDescricao })({ config: configTemp(false), resultado: r });
+  assert.strictEqual(r.curriculos.length, 1);
+  assert.match(r.fonteDasVagas, /Radar/);
+  assert.deepStrictEqual(cliente.escritas.map((e) => e.faixa), ["'Vagas'!K5:K5"]);
+});
+
+test("marcarCurriculoGerado acha a linha pela URL normalizada; vaga fora da planilha devolve false", async () => {
+  const cliente = planilhaFalsa(PLANILHA_BASE());
+  assert.strictEqual(await marcarCurriculoGerado(cliente, "ID", "https://vagas.exemplo/a/?utm_source=x"), true);
+  assert.strictEqual(await marcarCurriculoGerado(cliente, "ID", "https://vagas.exemplo/zzz"), false);
+});
+
+test("resumo mostra a origem das vagas e as linhas marcadas, sem dados pessoais", () => {
+  const r = resultadoVazio();
+  r.fonteDasVagas = "planilha (Se candidatar, sem CV gerado)";
+  r.marcadasNaPlanilha = 2;
+  r.curriculos = [{ titulo: "Vaga A", arquivo: "x.pdf", avisos: [] }];
+  const texto = formatarResumo(r, { dryRun: false, enviarCandidatura: false });
+  assert.match(texto, /Currículos sob medida gerados: 1 \(vagas: planilha/);
+  assert.match(texto, /marcadas como "CV gerado": 2/);
+});
+
+// ---- Descrição da vaga ----
+
+test("descrição: cache do Radar primeiro; depois a issue do GitHub; sem nada, null", async () => {
+  const config = configTemp();
+  salvarLote(config, [{ titulo: "Vaga no cache", empresa: "E", url: "https://vagas.exemplo/cache?utm_source=x", descricao: "Texto salvo" }]);
+  assert.strictEqual(lerVagaSalva(config, "https://vagas.exemplo/cache").descricao, "Texto salvo");
+  assert.strictEqual((await obterDescricaoDaVaga({ url: "https://vagas.exemplo/cache", config })).descricao, "Texto salvo");
+
+  const chamadas = [];
+  const fetchImpl = async (url) => { chamadas.push(url); return { ok: true, json: async () => ({ title: "Dev Jr", body: "React e Node" }) }; };
+  const issue = await obterDescricaoDaVaga({ url: "https://github.com/org/vagas/issues/12", config, fetchImpl });
+  assert.deepStrictEqual(issue, { titulo: "Dev Jr", descricao: "React e Node" });
+  assert.match(chamadas[0], /api\.github\.com\/repos\/org\/vagas\/issues\/12$/);
+
+  assert.strictEqual(await obterDescricaoDaVaga({ url: "https://outro.exemplo/vaga/1", config, fetchImpl }), null);
+  assert.strictEqual(await obterDescricaoDaVaga({ url: "https://github.com/org/vagas/issues/13", config, fetchImpl: async () => ({ ok: false }) }), null);
+  assert.strictEqual(await obterDescricaoDaVaga({ url: "https://github.com/org/vagas/issues/14", config, fetchImpl: async () => { throw new Error("sem rede"); } }), null);
 });

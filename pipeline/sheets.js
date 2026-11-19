@@ -215,4 +215,53 @@ async function registrarVagas(cliente, opcoes, vagas) {
   return { ...resultado, gravado: true };
 }
 
-module.exports = { normalizarUrl, criarClienteSheets, lerVagas, montarLinha, registrarVagas };
+/** Texto da coluna K depois que o currículo sob medida foi gerado. Sem caminho de arquivo: a planilha pode ser compartilhada. */
+const TEXTO_CV_GERADO = "CV gerado - aguardando revisão";
+
+/**
+ * Todas as linhas de vaga da aba, com o número da linha na planilha.
+ * @param {ClienteSheets} cliente
+ * @param {string} planilhaId
+ */
+async function lerLinhasDeVagas(cliente, planilhaId) {
+  const { aba, primeiraLinhaDeVaga } = PLANILHA;
+  const linhas = await cliente.obterValores(planilhaId, intervalo(aba, `A${primeiraLinhaDeVaga}`, "L"));
+  return linhas.map((l, i) => ({
+    linha: primeiraLinhaDeVaga + i,
+    titulo: String(l[1] ?? ""),
+    url: String(l[2] ?? ""),
+    empresa: String(l[3] ?? ""),
+    situacao: String(l[8] ?? ""),
+    motivo: String(l[10] ?? "")
+  }));
+}
+
+/**
+ * Vagas da planilha que ainda precisam de currículo: coluna I = "Se candidatar", com link, e coluna K que não começa com "CV gerado".
+ * @param {ClienteSheets} cliente
+ * @param {string} planilhaId
+ */
+async function lerPendentesDeCurriculo(cliente, planilhaId) {
+  const linhas = await lerLinhasDeVagas(cliente, planilhaId);
+  return linhas.filter((l) => normalizar(l.situacao) === "se candidatar" && l.url.trim() !== "" && !normalizar(l.motivo).startsWith("cv gerado"));
+}
+
+/**
+ * Escreve "CV gerado - aguardando revisão" na coluna K da linha da vaga (achada pela URL normalizada).
+ * @param {ClienteSheets} cliente
+ * @param {string} planilhaId
+ * @param {string} url
+ * @returns {Promise<boolean>} false se a vaga não está na planilha
+ */
+async function marcarCurriculoGerado(cliente, planilhaId, url) {
+  const alvo = (await lerLinhasDeVagas(cliente, planilhaId)).find((l) => normalizarUrl(l.url) === normalizarUrl(url));
+  if (!alvo) return false;
+  const { aba } = PLANILHA;
+  await cliente.escreverValores(planilhaId, intervalo(aba, `K${alvo.linha}`, `K${alvo.linha}`), [[TEXTO_CV_GERADO]]);
+  return true;
+}
+
+module.exports = {
+  normalizarUrl, criarClienteSheets, lerVagas, montarLinha, registrarVagas,
+  lerLinhasDeVagas, lerPendentesDeCurriculo, marcarCurriculoGerado, TEXTO_CV_GERADO
+};

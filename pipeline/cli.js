@@ -91,6 +91,7 @@ async function executar(argv, io = {}) {
         continue;
       }
       await rodar({ config, resultado, logs });
+      resultado.etapasRodadas.push(etapa);
     }
 
     saida(formatarResumo(resultado, config));
