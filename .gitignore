@@ -1,3 +1,11 @@
 node_modules/
 dist/
 *.docx
+
+# Pipeline de candidatura: segredos, saídas e sessão do navegador
+.env
+.env.*
+!.env.example
+secrets/
+output/
+token*.json
