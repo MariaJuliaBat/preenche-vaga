@@ -153,3 +153,27 @@ test("Product Engineer e Software Engineer são vagas de tecnologia; Tech Lead �
   const lead = resultadoDe({ titulo: "[Remoto] Tech Lead na Acme", rotulos: ["Remoto"] });
   assert.deepStrictEqual([lead.resultado, lead.motivo], ["descarte", "nível"]);
 });
+
+test("RD25: remoto restrito a outro país é descartado por local; Brasil, LATAM e Worldwide passam", () => {
+  const restritas = [
+    "This role is US only.",
+    "Remote - EU only",
+    "Candidates must reside in the US.",
+    "Must have work authorization in the United States.",
+    "Você precisa estar autorizado a trabalhar. Residentes nos EUA apenas.",
+    "Authorized to work in the UK is required."
+  ];
+  for (const descricao of restritas) {
+    const c = resultadoDe({ descricao });
+    assert.deepStrictEqual([descricao, c.resultado, c.motivo, c.detalhe], [descricao, "descarte", "local", "remoto restrito a outro país"]);
+  }
+  for (const descricao of ["Remote, open to Brazil and LATAM.", "Worldwide remote.", "US only, mas aceitamos Brasil.", "Equipe distribuída, remoto em todo o Brasil.", "Trabalhamos com clientes dos EUA e Europa."]) {
+    assert.strictEqual(resultadoDe({ descricao }).resultado, "aprovada", descricao);
+  }
+});
+
+test("RD25: a restrição só vale para vaga remota; presencial em Brasília não é afetada", () => {
+  const c = resultadoDe({ rotulos: ["Júnior", "Híbrido", "Brasília - DF"], descricao: "Escritório em Brasília. Parceiros dos EUA apenas visitam." });
+  assert.strictEqual(c.resultado, "aprovada");
+  assert.strictEqual(c.local.ehVagaDF, true);
+});

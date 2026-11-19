@@ -16,6 +16,23 @@ const MODALIDADES = {
   remoto: ["remoto", "remota", "remote", "home office", "home-office", "trabalho remoto", "teletrabalho"]
 };
 
+// Remoto restrito a outro país (RD25), sobre texto normalizado. Brasil, LATAM e Worldwide passam.
+const PAISES = "us|u\\.s\\.|usa|united states|eu|europe|uk|canada|portugal";
+const REMOTO_RESTRITO = [
+  new RegExp(`\\b(${PAISES}|australia)[- ]only\\b`),
+  /\b(eua|estados unidos|europa|portugal|canada|reino unido)\s+(apenas|somente|only)\b/,
+  new RegExp(`\\bmust (reside|live|be located|be based|be a resident) (in|within) (the )?(${PAISES})\\b`),
+  /\bmust (reside|be located|be based) in (?!brazil|brasil|latam)/,
+  new RegExp(`\\b(work authorization|authorized to work|eligible to work|right to work|work permit) (in|for) (the )?(${PAISES})\\b`),
+  /\bwork authorization in\b/,
+  /\bresidentes? (nos|na|no|em) (eua|estados unidos|europa|portugal|canada|reino unido)\b/
+];
+const ABERTO_AO_BRASIL = ["brasil", "brazil", "latam", "latin america", "america latina", "worldwide", "anywhere in the world", "work from anywhere"];
+
+/** @param {string} texto */
+const remotoRestritoAOutroPais = (texto) =>
+  REMOTO_RESTRITO.some((padrao) => padrao.test(texto)) && !acharTermo(texto, ABERTO_AO_BRASIL);
+
 /** @param {string} texto */
 function modalidadesEm(texto) {
   return {
@@ -30,6 +47,7 @@ function modalidadesEm(texto) {
  * @property {"remoto" | "hibrido" | "presencial" | null} modalidade
  * @property {boolean} ehVagaDF presencial ou híbrida em Brasília - DF ou RA (remoto nunca)
  * @property {"elegivel" | "fora" | "desconhecido"} situacao
+ * @property {string} [detalhe] por que está "fora", quando não é óbvio
  */
 
 /**
@@ -49,7 +67,12 @@ function detectarLocal(vaga) {
   if ((menc.hibrido || menc.presencial) && df) {
     return { modalidade: menc.hibrido ? "hibrido" : "presencial", ehVagaDF: true, situacao: "elegivel" };
   }
-  if (menc.remoto) return { modalidade: "remoto", ehVagaDF: false, situacao: "elegivel" };
+  if (menc.remoto) {
+    if (remotoRestritoAOutroPais(`${curto} | ${longo}`)) {
+      return { modalidade: "remoto", ehVagaDF: false, situacao: "fora", detalhe: "remoto restrito a outro país" };
+    }
+    return { modalidade: "remoto", ehVagaDF: false, situacao: "elegivel" };
+  }
   if (menc.hibrido || menc.presencial) {
     return { modalidade: menc.hibrido ? "hibrido" : "presencial", ehVagaDF: false, situacao: "fora" };
   }

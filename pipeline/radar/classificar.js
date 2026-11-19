@@ -133,7 +133,7 @@ function classificar(vaga, ctx) {
   if (!ehDeTecnologia(vaga)) return descarte("área");
 
   const local = detectarLocal(vaga);
-  if (local.situacao === "fora") return descarte("local", local.modalidade || "");
+  if (local.situacao === "fora") return descarte("local", local.detalhe || local.modalidade || "");
 
   const texto = normalizar(textoCompleto);
   if (NAO_REMUNERADA.test(texto) && !EXCECAO_BOLSA.test(texto)) return descarte("não remunerada");
