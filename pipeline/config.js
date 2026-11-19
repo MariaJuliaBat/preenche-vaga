@@ -20,7 +20,7 @@ const ETAPAS = Object.freeze(["radar", "curriculo", "candidatura"]);
 // (para deduplicar), mas nada é escrito.
 const EXIGIDAS = Object.freeze({
   radar: ["GOOGLE_SHEET_URL", "GOOGLE_SERVICE_ACCOUNT_FILE"],
-  curriculo: ["GOOGLE_DOC_CV_BASE_URL", "GOOGLE_SERVICE_ACCOUNT_FILE", "ANTHROPIC_API_KEY"],
+  curriculo: ["GOOGLE_DOC_CV_BASE_URL", "GOOGLE_SERVICE_ACCOUNT_FILE"],
   candidatura: ["GOOGLE_SHEET_URL", "GOOGLE_SERVICE_ACCOUNT_FILE"]
 });
 
@@ -103,9 +103,6 @@ function montarConfig(env, opcoes = {}) {
     contaDeServico: env.GOOGLE_SERVICE_ACCOUNT_FILE
       ? path.resolve(RAIZ, env.GOOGLE_SERVICE_ACCOUNT_FILE)
       : "",
-    anthropicApiKey: env.ANTHROPIC_API_KEY || "",
-    // Vazio usa o modelo padrão do módulo llm.
-    anthropicModel: env.ANTHROPIC_MODEL || "",
     dadosComplementares: path.resolve(RAIZ, env.DADOS_COMPLEMENTARES_FILE || "secrets/dados-complementares.json"),
     planilha: PLANILHA,
     radar: {

@@ -43,7 +43,9 @@ test("validar lista o que falta por etapa", () => {
   const erros = validar(config, {}, ["radar"]);
   assert.ok(erros.some((e) => e.includes("GOOGLE_SHEET_URL")));
   assert.ok(!erros.some((e) => e.includes("ANTHROPIC_API_KEY")));
-  assert.ok(validar(config, {}, ["curriculo"]).some((e) => e.includes("ANTHROPIC_API_KEY")));
+  const faltaNoCurriculo = validar(config, {}, ["curriculo"]);
+  assert.ok(faltaNoCurriculo.some((e) => e.includes("GOOGLE_DOC_CV_BASE_URL")));
+  assert.ok(!faltaNoCurriculo.some((e) => e.includes("ANTHROPIC_API_KEY"))); // sem LLM, sem chave
 });
 
 test("validar acusa arquivo de Service Account inexistente", () => {

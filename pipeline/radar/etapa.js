@@ -3,7 +3,6 @@
 const { extrairIdGoogle } = require("../config");
 const { criarClienteSheets, lerVagas, registrarVagas } = require("../sheets");
 const { lerTextoDoc } = require("../google-docs");
-const { criarLlm } = require("../llm");
 const { obterPerfil, perfilParaRadar } = require("../perfil");
 const { salvarLote } = require("../lote-arquivo");
 const { executarRadar } = require("./index");
@@ -31,24 +30,23 @@ function paraVagaDaPlanilha(a) {
 }
 
 /**
- * PF7: com o Doc e a chave do LLM configurados, a stack e a formação vêm do Perfil; senão, ou se falhar, do RADAR_STACK.
+ * PF7: com o Doc configurado, a stack e a formação vêm do Perfil; senão, ou se falhar, do RADAR_STACK.
  * @param {any} config
  * @param {any} resultado
- * @param {{ perfil?: import("./tipos").Perfil, llm?: import("../llm").Llm, lerTexto?: () => Promise<string> }} deps
+ * @param {{ perfil?: import("./tipos").Perfil, lerTexto?: () => Promise<string> }} deps
  * @returns {Promise<import("./tipos").Perfil>}
  */
 async function carregarPerfil(config, resultado, deps) {
   if (deps.perfil) return deps.perfil;
   const provisorio = { habilidades: config.radar.stack, formacao: null };
 
-  if (!config.googleDocCvBaseUrl || !config.anthropicApiKey) {
-    resultado.avisosPerfil.push("Sem Perfil: defina GOOGLE_DOC_CV_BASE_URL e ANTHROPIC_API_KEY. Usei RADAR_STACK e formação não informada.");
+  if (!config.googleDocCvBaseUrl) {
+    resultado.avisosPerfil.push("Sem Perfil: defina GOOGLE_DOC_CV_BASE_URL. Usei RADAR_STACK e formação não informada.");
     return provisorio;
   }
   try {
     const { perfil, avisos } = await obterPerfil({
       lerTexto: deps.lerTexto || (() => lerTextoDoc({ docId: extrairIdGoogle(config.googleDocCvBaseUrl), contaDeServico: config.contaDeServico })),
-      llm: deps.llm || (() => criarLlm({ apiKey: config.anthropicApiKey, modelo: config.anthropicModel || undefined })),
       pastaSaida: config.pastas.saida
     });
     resultado.avisosPerfil.push(...avisos);
@@ -61,7 +59,7 @@ async function carregarPerfil(config, resultado, deps) {
 
 /**
  * @param {{ conectores?: import("./tipos").Conector[], clienteSheets?: ReturnType<typeof criarClienteSheets>, hoje?: Date,
- *   perfil?: import("./tipos").Perfil, llm?: import("../llm").Llm, lerTexto?: () => Promise<string> }} [deps] injeção para testes
+ *   perfil?: import("./tipos").Perfil, lerTexto?: () => Promise<string> }} [deps] injeção para testes
  */
 function criarEtapaRadar(deps = {}) {
   return async function etapaRadar(/** @type {{ config: any, resultado: any, logs: any }} */ { config, resultado, logs }) {
