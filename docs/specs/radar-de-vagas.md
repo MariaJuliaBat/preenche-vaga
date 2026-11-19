@@ -90,6 +90,7 @@ Ordem de avaliação: segurança, encerrada, vigência, nível, área, local, re
 | **RD19** | Ubíquo | Remoto **não deve** contar como Vaga DF no cálculo da Cota DF. |
 | **RD20** | Evento | **Quando** o Radar montar o Lote Final, ele **deve** limitá-lo a `MAX_VAGAS_LOTE` vagas (padrão 10), reservar primeiro `ceil(50% × tamanho do lote)` posições para as Vagas DF de maior Pontuação disponíveis e preencher o restante pelas de maior Pontuação, de qualquer local. |
 | **RD24** | Indesejado | **Se** a vaga passar nas demais regras mas o Local não puder ser identificado (sem modalidade e sem cidade), **então** o Radar **deve** registrá-la como Pista com o motivo "local não informado". |
+| **RD25** | Indesejado | **Se** a vaga remota for restrita a outro país (ex.: "US only", "EU only", "must reside in the US", "work authorization in..."), **então** o Radar **deve** descartá-la com motivo "local" e detalhe "remoto restrito a outro país". Remoto que cite Brasil, LATAM ou Worldwide **deve** ser aceito. |
 | **RD23** | Ubíquo | O Radar **deve** ler `RADAR_VIGENCIA_DIAS` (padrão 20) e `MAX_VAGAS_LOTE` (padrão 10) do `.env`; valor que não seja inteiro positivo **deve** parar a execução com erro claro (como em P3). |
 | **RD21** | Evento | **Quando** o Radar terminar, ele **deve** entregar ao resumo (P6): aprovadas, % DF, Pistas, Descartes por motivo, falhas de Conector e Alertas de Formação. |
 | **RD22** | Indesejado | **Se** `--dry-run` estiver ligado, **então** o Radar **deve** buscar e classificar normalmente, mas **não deve** escrever na planilha; os `.jsonl` de `output/logs/` continuam sendo escritos (P4). |
@@ -247,7 +248,7 @@ Funcionalidade: Radar de Vagas
 | RD3 | Um Conector falha... | `pipeline/radar/index.js` |
 | RD4 | Vaga já registrada... | `normalizarUrl` (`pipeline/sheets.js`), `pipeline/radar/classificar.js` |
 | RD5, RD6 | Pedido de pagamento..., Instrução escondida... | `pipeline/radar/seguranca.js` |
-| RD7 a RD12, RD24 | Vigência, Sem data, Nível, Local, Voluntariado | `pipeline/radar/classificar.js` |
+| RD7 a RD12, RD24, RD25 | Vigência, Sem data, Nível, Local, Voluntariado | `pipeline/radar/classificar.js` |
 | RD13 | Exigência de Bacharelado... | `pipeline/radar/classificar.js` (`alertaFormacao`) |
 | RD14 a RD16 | IA aplicada pontua mais... | `pipeline/radar/pontuar.js`, `pesos.js` |
 | RD17 a RD20, RD23 | Cota DF (2 cenários), Lote limitado a 10 | `pipeline/radar/lote.js` |
