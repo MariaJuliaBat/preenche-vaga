@@ -23,14 +23,32 @@
     <section id="aba-operar" class="painel">
       <div class="cartao">
         <h2>Executar</h2>
-        <p class="dica">Roda a CLI do Pipeline. Candidatura não é aberta por aqui.</p>
+        <p class="dica">Roda a CLI do Pipeline; a regra continua nela. A simulação vem ligada.</p>
         <label class="opcao"><input type="checkbox" id="simulacao" checked> Simulação (<code>--dry-run</code>): não escreve na planilha</label>
         <div class="botoes">
           <button id="rodar-radar" class="primario">Buscar vagas (Radar)</button>
           <button id="rodar-cv" class="primario">Gerar currículos</button>
+          <button id="rodar-candidatura" class="primario">Candidatar (preencher formulários)</button>
+        </div>
+        <div id="confirma-envio" class="aviso" hidden role="alertdialog" aria-labelledby="confirma-titulo">
+          <p id="confirma-titulo"><strong>Sem simulação, isto pode enviar candidaturas reais.</strong></p>
+          <p id="confirma-texto"></p>
+          <div class="botoes">
+            <button id="confirma-sim" type="button" class="perigo">Sim, rodar sem simulação</button>
+            <button id="confirma-nao" type="button">Cancelar</button>
+          </div>
         </div>
         <p id="status-execucao" class="status" role="status"></p>
         <pre id="saida" class="saida" aria-label="Saída da CLI"></pre>
+      </div>
+      <div class="cartao">
+        <h2>Login nos portais</h2>
+        <p class="dica">Abre o navegador no seu computador para você entrar à mão (o Pipeline nunca vê sua senha). Feche a janela ao terminar: o login fica salvo para as próximas execuções.</p>
+        <div class="botoes">
+          <button id="login-gupy">Login no Gupy</button>
+          <button id="login-trampos">Login no Trampos</button>
+          <button id="login-branco">Janela em branco</button>
+        </div>
       </div>
     </section>
 

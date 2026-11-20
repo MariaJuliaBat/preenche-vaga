@@ -21,6 +21,11 @@ module.exports = [
     }
   },
   {
+    // Funções que o Auto-Apply (e seus testes) executam dentro da página (page.evaluate): têm DOM, além do Node.
+    files: ["pipeline/apply/pagina.js", "pipeline/apply/motor.js", "tests/pipeline/apply/motor.test.js"],
+    languageOptions: { sourceType: "commonjs", globals: { ...globals.node, ...globals.browser } }
+  },
+  {
     // Front-end do Dashboard: script clássico no navegador.
     files: ["dashboard/public/**/*.js"],
     languageOptions: { sourceType: "script", globals: globals.browser }

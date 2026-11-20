@@ -7,6 +7,8 @@
  * @property {number} remotas
  * @property {number} enviadas candidaturas enviadas com sucesso
  * @property {number} pendencias candidaturas pausadas para intervenção humana
+ * @property {number} simuladas candidaturas preenchidas em --dry-run (nada enviado)
+ * @property {{ titulo: string, resultado: string, motivos: string[], portal: string }[]} candidaturas resultado de cada Tentativa da Etapa candidatura
  * @property {Record<string, unknown>[]} pistas
  * @property {Record<string, unknown>[]} descartes
  * @property {{ titulo: string, empresa: string, url: string, ehVagaDF: boolean, pontos: number }[]} aprovadas
@@ -31,6 +33,8 @@ const resultadoVazio = () => ({
   remotas: 0,
   enviadas: 0,
   pendencias: 0,
+  simuladas: 0,
+  candidaturas: [],
   pistas: [],
   descartes: [],
   aprovadas: [],
@@ -108,6 +112,10 @@ function formatarResumo(r, modo) {
       for (const aviso of c.avisos) linhas.push(`      aviso: ${aviso}`);
     }
     for (const falha of r.falhasCurriculo) linhas.push(`Falha ao gerar currículo para "${falha.titulo}": ${falha.erro}`);
+  }
+  if (r.candidaturas.length > 0) {
+    linhas.push(`Candidatura: ${r.enviadas} enviada(s), ${r.pendencias} pendência(s), ${r.simuladas} simulada(s)`);
+    for (const c of r.candidaturas) linhas.push(`  - ${c.titulo} [${c.portal}] → ${c.resultado}${c.motivos.length > 0 ? ` (${c.motivos.join("; ")})` : ""}`);
   }
   for (const aviso of r.avisosPerfil) linhas.push(`Aviso do Perfil: ${aviso}`);
   for (const nome of r.etapasNaoImplementadas) linhas.push(`Etapa ainda não implementada: ${nome}`);

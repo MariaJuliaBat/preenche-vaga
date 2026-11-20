@@ -67,3 +67,22 @@ test("resumo calcula % de Brasília e alerta abaixo de 50%", () => {
   assert.match(texto, /Brasília - DF \(presencial\/híbrida\): 1 \(25%\)/);
   assert.match(texto, /menos de 50%/);
 });
+
+test("A1: --login chama o Login Assistido com a pasta da Sessão e o portal; não exige planilha", async () => {
+  const chamadas = [];
+  const login = async (args) => { chamadas.push(args); };
+  assert.strictEqual(await executar(["--login", "gupy"], { env: {}, saida: () => {}, login }), 0);
+  assert.strictEqual(chamadas[0].portal, "gupy");
+  assert.match(chamadas[0].config.pastas.sessaoNavegador, /sessao-navegador$/);
+  assert.strictEqual(await executar(["--login"], { env: {}, saida: () => {}, login }), 0);
+  assert.strictEqual(chamadas[1].portal, null);
+});
+
+test("--login só vale sozinho; texto solto sem --login é recusado", async () => {
+  const saidas = [];
+  const io = { env: {}, saida: (t) => saidas.push(t), login: async () => assert.fail("não deveria abrir") };
+  assert.strictEqual(await executar(["--login", "--only-radar"], io), 1);
+  assert.strictEqual(await executar(["--login", "--dry-run"], io), 1);
+  assert.strictEqual(await executar(["--login", "gupy", "trampos"], io), 1);
+  assert.strictEqual(await executar(["gupy"], io), 1);
+});

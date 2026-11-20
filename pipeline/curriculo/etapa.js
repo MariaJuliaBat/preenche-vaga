@@ -14,6 +14,7 @@ const { normalizar } = require("../radar/texto");
 const { montarConteudo } = require("./conteudo");
 const { obterDescricaoDaVaga } = require("./descricao");
 const { gerarPdf } = require("./pdf");
+const { registrarCv } = require("./manifesto");
 
 /** @param {string} texto */
 const slug = (texto) => normalizar(texto).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "vaga";
@@ -74,6 +75,7 @@ function criarEtapaCurriculo(deps = {}) {
         const nome = `${String(i + 1).padStart(2, "0")}-${empresa ? `${slug(empresa)}-` : ""}${slug(vaga.titulo)}.pdf`;
         const arquivo = await gerarPdf(cv, path.join(config.pastas.curriculos, nome));
         resultado.curriculos.push({ titulo: vaga.titulo, arquivo, avisos: avisosDoCv, palavrasChave });
+        registrarCv(config, vaga.url, arquivo); // a Etapa candidatura só anexa o PDF desta vaga
 
         // Marca a coluna K para o --only-cv seguinte não repetir a vaga. Em --dry-run a planilha não é escrita.
         if (cliente && planilhaId && config.escreverPlanilha && vaga.url) {
