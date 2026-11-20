@@ -96,6 +96,14 @@ function criarEtapaRadar(deps = {}) {
     salvarLote(config, resultado.aprovadas);
     resultado.alertasFormacao = r.lote.flatMap((a) => a.alertas.map((alerta) => `${a.vaga.titulo}: ${alerta}`));
     resultado.falhasConectores = r.falhas;
+    resultado.fontesDoRadar = r.coletas;
+    // Tudo que passou na classificação, antes do corte do Lote Final (MAX_VAGAS_LOTE).
+    resultado.aprovadasNoTotal = {
+      total: r.aprovadas.length,
+      emBrasilia: r.aprovadas.filter((a) => a.ehVagaDF).length,
+      remotas: r.aprovadas.filter((a) => !a.ehVagaDF).length,
+      porFonte: Object.fromEntries(r.aprovadas.reduce((m, a) => m.set(a.vaga.fonte, (m.get(a.vaga.fonte) || 0) + 1), new Map()))
+    };
     resultado.segundaBusca = r.segundaBusca;
     resultado.gravadasNaPlanilha = gravacao.gravado ? gravacao.escritas : 0;
     resultado.pistas.push(...r.pistas);

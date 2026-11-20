@@ -71,7 +71,7 @@ function lerInteiroPositivo(valor, nome, padrao) {
 }
 
 /** Fontes do Radar, na ordem de busca. As com busca focada em Brasília - DF vêm antes do GitHub. */
-const FONTES_DO_RADAR = Object.freeze(["gupy", "linkedin", "indeed", "github"]);
+const FONTES_DO_RADAR = Object.freeze(["gupy", "solides", "infojobs", "linkedin", "indeed", "github"]);
 
 /**
  * RADAR_FONTES: lista de fontes separadas por vírgula; vazio usa todas. Fonte desconhecida é erro (nada de adivinhar).

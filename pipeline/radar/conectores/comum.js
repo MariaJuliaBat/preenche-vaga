@@ -23,6 +23,7 @@ const ENTIDADES = /** @type {Record<string, string>} */ ({ amp: "&", lt: "<", gt
 function textoDoHtml(html) {
   return String(html ?? "")
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<\/?(b|i|u|em|strong|span|a|font|small|sup|sub|mark)\b[^>]*>/gi, "") // formatação em linha não separa palavras
     .replace(/<[^>]+>/g, " ")
     .replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (inteira, nome) => {
       if (nome[0] === "#") {

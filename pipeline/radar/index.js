@@ -35,6 +35,8 @@ async function executarRadar(opcoes) {
 
   /** @type {{ conector: string, foco: string, erro: string }[]} */
   const falhas = [];
+  /** Quantas vagas cada fonte entregou em cada busca (só as que responderam). @type {{ conector: string, foco: string, vagas: number }[]} */
+  const coletas = [];
   /** @type {Aprovada[]} */
   const aprovadas = [];
   /** @type {Record<string, unknown>[]} */
@@ -52,6 +54,7 @@ async function executarRadar(opcoes) {
         const vagas = await conector.buscar({ foco });
         if (!Array.isArray(vagas)) throw new Error("o Conector não devolveu uma lista de vagas");
         for (const v of vagas) brutas.push({ ...v, fonte: v.fonte || conector.nome });
+        coletas.push({ conector: conector.nome, foco, vagas: vagas.length });
       } catch (erro) {
         // RD3: uma fonte que falha não derruba as outras.
         falhas.push({ conector: conector.nome, foco, erro: erro instanceof Error ? erro.message : String(erro) });
@@ -109,7 +112,7 @@ async function executarRadar(opcoes) {
     montado = montarLote(aprovadas, maxLote);
   }
 
-  return { ...montado, segundaBusca, aprovadas, pistas, descartes, falhas };
+  return { ...montado, segundaBusca, aprovadas, pistas, descartes, falhas, coletas };
 }
 
 module.exports = { executarRadar };
