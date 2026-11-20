@@ -6,7 +6,7 @@ const { lerTextoDoc } = require("../google-docs");
 const { obterPerfil, perfilParaRadar } = require("../perfil");
 const { salvarLote } = require("../lote-arquivo");
 const { executarRadar } = require("./index");
-const { criarConectoresGithub } = require("./conectores/github");
+const { criarConectores } = require("./conectores");
 
 const ROTULO = { remoto: "Remoto", hibrido: "Híbrido", presencial: "Presencial" };
 const MAX_DESCRICAO_SALVA = 6000;
@@ -65,8 +65,7 @@ function criarEtapaRadar(deps = {}) {
   return async function etapaRadar(/** @type {{ config: any, resultado: any, logs: any }} */ { config, resultado, logs }) {
     const planilhaId = extrairIdGoogle(config.googleSheetUrl);
     const cliente = deps.clienteSheets || criarClienteSheets({ contaDeServico: config.contaDeServico });
-    const conectores = deps.conectores
-      || criarConectoresGithub({ repos: config.radar.reposGithub, token: config.radar.githubToken });
+    const conectores = deps.conectores || criarConectores(config);
 
     const { urlsExistentes } = await lerVagas(cliente, planilhaId);
     const perfil = await carregarPerfil(config, resultado, deps);

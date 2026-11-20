@@ -79,6 +79,7 @@ A planilha precisa ter uma aba chamada **Vagas**, com o cabeçalho na **linha 4*
 | `APPLY_HEADLESS` | `true` esconde a janela do navegador na candidatura (padrão: janela visível) |
 | `OUTPUT_DIR`, `BROWSER_USER_DATA_DIR` | Pastas de saída e de sessão (opcionais) |
 | `PDF_BROWSER_PATH` | Caminho do Chrome/Edge, se não for encontrado sozinho (opcional) |
+| `RADAR_FONTES` | Fontes do Radar, na ordem: `gupy,linkedin,indeed,github` (padrão). Ex.: `RADAR_FONTES=gupy,github` |
 | `RADAR_VIGENCIA_DIAS`, `MAX_VAGAS_LOTE`, `RADAR_REPOS_GITHUB`, `GITHUB_TOKEN`, `RADAR_STACK` | Ajustes do Radar (opcionais, veja o `.env.example`) |
 
 **e) Dados complementares.** Portais pedem dados que o currículo não tem (CPF, nascimento, gênero, disponibilidade...). Copie o exemplo e preencha com os **seus** dados:
@@ -93,11 +94,12 @@ Campos aceitos: `cpf`, `dataNascimento` (`AAAA-MM-DD`), `genero`, `autodeclaraca
 
 ```powershell
 node pipeline/cli.js --login gupy      # abre o login do Gupy
-node pipeline/cli.js --login trampos   # abre o login de candidatos do Trampos
+node pipeline/cli.js --login indeed     # abre o login do Indeed
+node pipeline/cli.js --login infojobs   # abre o login de candidatos do InfoJobs
 node pipeline/cli.js --login           # janela em branco, para qualquer outro site
 ```
 
-Entre normalmente e **feche a janela** ao terminar. Enquanto ela estiver aberta, o pipeline não consegue abrir a mesma sessão. O LinkedIn não é automatizado, de propósito, para não arriscar sua conta.
+Entre normalmente e **feche a janela** ao terminar. Enquanto ela estiver aberta, o pipeline não consegue abrir a mesma sessão. O LinkedIn não tem login automatizado, de propósito, para não arriscar sua conta.
 
 ### 2.2 Comandos
 
@@ -105,13 +107,19 @@ Use `node pipeline/cli.js ...` ou `npm run pipeline -- ...`.
 
 | Comando | O que faz |
 |---|---|
-| `--only-radar` | Busca vagas nos repositórios de vagas do GitHub (único conector hoje; a arquitetura aceita outros), pontua, descarta as antigas ou suspeitas, respeita a cota de 50% em Brasília - DF e grava as aprovadas na planilha como `Se candidatar`. |
+| `--only-radar` | Busca vagas de Estágio e Júnior em TI (Gupy, LinkedIn, Indeed e repositórios do GitHub), pontua (desenvolvimento, automação e IA sobem), descarta as antigas ou suspeitas, respeita a cota de 50% em Brasília - DF e grava as aprovadas na planilha como `Se candidatar`. |
 | `--only-cv` | Lê o currículo base e gera um **PDF sob medida** em `output/cvs/` para cada vaga `Se candidatar` sem CV. |
 | `--only-apply` | Abre cada vaga `Se candidatar`, preenche o formulário, anexa o PDF **daquela** vaga, guarda o print em `output/receipts/` e, se tudo estiver liberado, envia. |
-| `--login [gupy\|trampos]` | Login assistido (veja 2.1 f). Use sozinho. |
+| `--login [gupy\|indeed\|infojobs]` | Login assistido (veja 2.1 f). Use sozinho. |
 | `--dry-run` | Simula: não envia nada e não escreve na planilha. Combina com os `--only-*`. |
 | sem opções | Radar, currículo e candidatura em sequência. |
 | `--help` | Mostra a ajuda. |
+
+**Sobre as fontes do Radar:**
+
+- **Gupy** usa a API JSON pública da própria página de busca (Brasília - DF e remoto): é a fonte mais confiável.
+- **LinkedIn** usa a busca pública sem login, para não expor a sua conta, e **Indeed** usa um navegador. Os dois costumam **bloquear acesso automatizado** (LinkedIn com HTTP 429, Indeed com verificação anti-robô). Quando isso acontece o Radar mostra a falha no resumo e segue com as outras fontes. Ele **nunca** tenta burlar o bloqueio. Se você só quer as fontes que funcionam, use `RADAR_FONTES=gupy,github`.
+- Vagas de **Estágio e Júnior** são aceitas em qualquer área de TI (desenvolvimento, suporte, infraestrutura, redes, dados, QA, RPA, segurança...); desenvolvimento, automação e IA pontuam mais.
 
 Recomendação para a primeira vez, sempre com `--dry-run`:
 

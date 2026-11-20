@@ -31,7 +31,7 @@ preencher (e, se ela autorizar, enviar) a candidatura e registrar tudo na
 | **Etapa** | Uma das três partes do Pipeline: `radar`, `curriculo`, `candidatura`. | `ETAPAS` |
 | **Planilha de Controle** | Google Sheets, aba "Vagas", cabeçalho na linha 4, vaga nº 1 na linha 5. | `PLANILHA` |
 | **Radar** | Módulo que busca, pontua e filtra vagas. | `pipeline/radar/` |
-| **Conector** | Plugin do Radar para uma fonte (Gupy, Trampos.co, GitHub...). | `pipeline/radar/conectores/` |
+| **Conector** | Plugin do Radar para uma fonte (Gupy, LinkedIn, Indeed, GitHub...). | `pipeline/radar/conectores/` |
 | **Vaga Individual** | Vaga com link próprio e data de publicação confirmada. | — |
 | **Descarte** | Vaga recusada (antiga, encerrada, suspeita), com motivo, em `output/logs/descartes.jsonl`. | `logs.registrar("descartes")` |
 | **Pista** | Vaga promissora sem link individual ou sem data confirmada, em `output/logs/pistas.jsonl`, para revisão manual. | `logs.registrar("pistas")` |

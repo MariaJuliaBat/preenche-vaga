@@ -7,7 +7,7 @@
 //   npm run pipeline -- --only-cv       só o gerador de currículo
 //   npm run pipeline -- --only-apply    só a candidatura
 //   npm run pipeline -- --dry-run       simula: não envia e não escreve na planilha
-//   npm run pipeline -- --login gupy    abre o navegador para você entrar (gupy | trampos; sem nome, janela em branco)
+//   npm run pipeline -- --login gupy    abre o navegador para você entrar (gupy | indeed | infojobs; sem nome, janela em branco)
 const { parseArgs } = require("node:util");
 const { ETAPAS, lerArquivoEnv, montarConfig, validar } = require("./config");
 const logs = require("./logs");
@@ -23,7 +23,7 @@ const AJUDA = `Uso: npm run pipeline -- [opções]
   --only-cv      roda só o gerador de currículo
   --only-apply   roda só o preenchimento/envio
   --dry-run      simula tudo: não envia candidatura e não escreve na planilha
-  --login [site] abre o navegador visível para você entrar à mão (gupy ou trampos; sem nome, em branco)
+  --login [site] abre o navegador visível para você entrar à mão (gupy, indeed ou infojobs; sem nome, em branco)
                  e salva o login em output/sessao-navegador/. Use sozinho.
   -h, --help     mostra esta ajuda
 

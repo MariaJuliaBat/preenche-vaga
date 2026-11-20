@@ -2,6 +2,7 @@
 // `htmlDoCv` é pura e define o documento (HTML + CSS); `gerarPdf` só imprime esse HTML pelo Chrome ou Edge instalado.
 const fs = require("node:fs");
 const path = require("node:path");
+const { abrirNavegador } = require("../navegador");
 
 /** @param {unknown} texto */
 const esc = (texto) => String(texto ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -119,22 +120,6 @@ function htmlDoCv(cv) {
   if (cv.idiomas.length) h.push(`<h2>Idiomas</h2>`, `<p>${esc(cv.idiomas.join(", "))}</p>`);
 
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Currículo - ${esc(id.nome || "")}</title><style>${CSS}</style></head><body>${h.join("\n")}</body></html>`;
-}
-
-/** Caminhos do Chrome ou Edge: PDF_BROWSER_PATH tem prioridade; senão tenta os canais instalados. */
-async function abrirNavegador() {
-  const { chromium } = require("playwright-core");
-  if (process.env.PDF_BROWSER_PATH) return chromium.launch({ executablePath: process.env.PDF_BROWSER_PATH });
-  /** @type {unknown} */
-  let ultimoErro = null;
-  for (const channel of ["chrome", "msedge"]) {
-    try {
-      return await chromium.launch({ channel });
-    } catch (erro) {
-      ultimoErro = erro;
-    }
-  }
-  throw new Error(`Não achei Chrome nem Edge para gerar o PDF (defina PDF_BROWSER_PATH com o caminho do executável). ${ultimoErro instanceof Error ? ultimoErro.message.split("\n")[0] : ""}`);
 }
 
 /** O PDF só pode ser gerado se houver Chrome ou Edge; os testes usam isto para pular. */

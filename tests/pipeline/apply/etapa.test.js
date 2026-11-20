@@ -115,7 +115,7 @@ test("A24, A26, A29: enviada atualiza I, K e L, conta no resumo e não gera Pend
   assert.strictEqual(r.pendencias, 0);
   assert.strictEqual(chamadas[0].cvPath, cv); // o PDF desta vaga
   assert.strictEqual(chamadas[0].enviar, true);
-  assert.ok(chamadas[0].dominiosPermitidos.includes("empresa.gupy.io") && chamadas[0].dominiosPermitidos.includes("trampos.co"));
+  assert.ok(chamadas[0].dominiosPermitidos.includes("empresa.gupy.io") && chamadas[0].dominiosPermitidos.includes("indeed.com") && !chamadas[0].dominiosPermitidos.includes("trampos.co"));
   assert.deepStrictEqual(cenario.cliente.escritas.map((e) => e.faixa), ["I5:I5", "K5:L5"]);
   assert.strictEqual(cenario.cliente.escritas[0].valores[0][0], "Candidatura enviada");
   const l = cenario.cliente.escritas[1].valores[0];

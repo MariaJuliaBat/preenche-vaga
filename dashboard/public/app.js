@@ -71,7 +71,7 @@ function mostrarExecucao(exec) {
 }
 
 let autoSubmitLigado = false;
-const BOTOES_DE_EXECUCAO = ["rodar-radar", "rodar-cv", "rodar-candidatura", "login-gupy", "login-trampos", "login-branco"];
+const BOTOES_DE_EXECUCAO = ["rodar-radar", "rodar-cv", "rodar-candidatura", "login-gupy", "login-indeed", "login-infojobs", "login-branco"];
 let esperaAnterior = false;
 async function atualizarEstado() {
   try {
@@ -131,7 +131,8 @@ $("rodar-radar").addEventListener("click", () => executar("radar"));
 $("rodar-cv").addEventListener("click", () => executar("curriculo"));
 $("rodar-candidatura").addEventListener("click", pedirCandidatura);
 $("login-gupy").addEventListener("click", () => enviarExecucao({ etapa: "login", portal: "gupy" }));
-$("login-trampos").addEventListener("click", () => enviarExecucao({ etapa: "login", portal: "trampos" }));
+$("login-indeed").addEventListener("click", () => enviarExecucao({ etapa: "login", portal: "indeed" }));
+$("login-infojobs").addEventListener("click", () => enviarExecucao({ etapa: "login", portal: "infojobs" }));
 $("login-branco").addEventListener("click", () => enviarExecucao({ etapa: "login" }));
 
 // ---- Currículos ----

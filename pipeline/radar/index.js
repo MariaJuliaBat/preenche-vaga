@@ -14,6 +14,7 @@ const { montarLote } = require("./lote");
  * @property {string[]} alertas
  * @property {string[]} ia termos de IA aplicada achados
  * @property {string[]} stack habilidades do Perfil achadas
+ * @property {"dev" | "ti" | null} area desenvolvimento/automação/IA ("dev") ou outra área de TI de nível de entrada ("ti")
  */
 
 /**
@@ -89,7 +90,7 @@ async function executarRadar(opcoes) {
         const p = pontuar(vaga, c, perfil);
         aprovadas.push({
           vaga, pontos: p.pontos, ehVagaDF: Boolean(c.local?.ehVagaDF), modalidade: c.local?.modalidade || null,
-          alertas: c.alertas || [], ia: p.ia, stack: p.stack
+          alertas: c.alertas || [], ia: p.ia, stack: p.stack, area: c.area || null
         });
       }
     }

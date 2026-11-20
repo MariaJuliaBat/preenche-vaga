@@ -11,12 +11,27 @@ const NIVEIS_BLOQUEADOS_FORTES = ["tech lead", "techlead", "lider tecnico", "lid
 const NIVEIS_BLOQUEADOS = ["pleno", "plena", "senior", "sr", "pl"];
 const NIVEIS_PERMITIDOS = ["estagio", "estagiario", "estagiaria", "junior", "jr", "trainee"];
 
+// Área de desenvolvimento, automação e IA: aceita em qualquer nível permitido e pontua mais (PESOS.areaDesenvolvimento).
 const TERMOS_AREA = [
   "desenvolvedor", "desenvolvedora", "desenvolvimento", "developer", "dev", "programador", "programadora", "engenheiro de software", "engenheira de software", "software engineer", "product engineer", "ai engineer", "ml engineer", "data engineer", "platform engineer", "engenheiro de dados", "engenheira de dados",
   "software", "frontend", "front-end", "front end", "backend", "back-end", "back end", "fullstack", "full stack", "full-stack", "mobile",
   "devops", "sre", "qa", "quality assurance", "analista de sistemas", "analista de testes", "analista de dados", "dados", "data", "ti", "tecnologia",
-  "react", "node", "nodejs", "python", "javascript", "typescript", "java", "cloud", "machine learning", "inteligencia artificial", "ia"
+  "react", "node", "nodejs", "python", "javascript", "typescript", "java", "cloud", "machine learning", "inteligencia artificial", "ia",
+  "automacao", "automacoes", "rpa"
 ];
+
+// Outras áreas de TI: só para Estágio, Júnior ou Trainee (nível de entrada). Termos genéricos demais ("suporte", "redes", "testes")
+// entram só qualificados, para não aceitar "suporte ao cliente" nem "redes sociais".
+const TERMOS_AREA_TI = [
+  "tecnologia da informacao", "informatica", "sistemas de informacao", "sistemas", "analista de suporte", "suporte tecnico", "suporte de ti", "suporte ti",
+  "suporte a usuarios", "service desk", "servicedesk", "help desk", "helpdesk", "central de servicos", "n1", "n2", "atendimento de chamados",
+  "infraestrutura", "infra", "redes de computadores", "administracao de redes", "administrador de redes", "analista de redes", "redes e infraestrutura", "noc", "soc",
+  "banco de dados", "dba", "bi", "business intelligence", "power bi", "analise de dados", "ciencia de dados", "data science", "etl", "sql",
+  "qualidade de software", "testes de software", "teste de software", "analista de testes", "analista de qualidade", "testador",
+  "seguranca da informacao", "ciberseguranca", "cybersecurity", "seguranca cibernetica", "pentest", "infosec"
+];
+// Se a área só bate por um termo genérico, estas expressões mostram que NÃO é de TI.
+const NAO_E_TI = /(redes sociais|social media|suporte (ao cliente|comercial|administrativo|de vendas|ao consumidor)|atendimento ao cliente|analise de dados de (vendas|mercado)|testes? (de laboratorio|clinicos?|de qualidade de produto))/;
 
 const ENCERRADA = /(vaga|processo seletivo|inscricoes|candidaturas) (esta |foi )?(encerrad[oa]s?|fechad[oa]s?|preenchid[oa]s?|finalizad[oa]s?)/;
 const NAO_REMUNERADA = /(voluntari[oa]|nao remunerad[oa]|sem remuneracao|trabalho gratuito)/;
@@ -41,14 +56,20 @@ function detectarNivel(vaga) {
   return { tipo: "desconhecido", termo: null };
 }
 
-/** @param {import("./tipos").VagaBruta} vaga */
-function ehDeTecnologia(vaga) {
+/**
+ * "dev": desenvolvimento, automação ou IA. "ti": outra área de TI, aceita só em nível de entrada. null: não é de tecnologia.
+ * @param {import("./tipos").VagaBruta} vaga
+ * @param {"permitido" | "bloqueado" | "desconhecido"} nivel
+ * @returns {"dev" | "ti" | null}
+ */
+function areaDaVaga(vaga, nivel) {
   const campo = normalizar([vaga.titulo, vaga.nivel, ...(vaga.rotulos || [])].filter(Boolean).join(" | "));
-  if (acharTermo(campo, TERMOS_AREA)) return true;
+  if (acharTermo(campo, TERMOS_AREA)) return "dev";
+  if (nivel === "permitido" && acharTermo(campo, TERMOS_AREA_TI) && !NAO_E_TI.test(campo)) return "ti";
   // Título sem pista: precisa de pelo menos dois termos fortes na descrição.
   const longo = normalizar(vaga.descricao);
   const fortes = ["desenvolvedor", "desenvolvimento de software", "programacao", "javascript", "python", "react", "node", "typescript", "java", "api"];
-  return fortes.filter((t) => acharTermo(longo, [t])).length >= 2;
+  return fortes.filter((t) => acharTermo(longo, [t])).length >= 2 ? "dev" : null;
 }
 
 /**
@@ -99,6 +120,7 @@ function alertasDeFormacao(vaga, perfil) {
  * @property {string} [detalhe]
  * @property {ReturnType<typeof detectarNivel>} [nivel]
  * @property {ReturnType<typeof detectarLocal>} [local]
+ * @property {"dev" | "ti" | null} [area]
  * @property {string[]} [alertas]
  */
 
@@ -130,7 +152,8 @@ function classificar(vaga, ctx) {
   const nivel = detectarNivel(vaga);
   if (nivel.tipo === "bloqueado") return descarte("nível", nivel.termo || "");
 
-  if (!ehDeTecnologia(vaga)) return descarte("área");
+  const area = areaDaVaga(vaga, nivel.tipo);
+  if (!area) return descarte("área");
 
   const local = detectarLocal(vaga);
   if (local.situacao === "fora") return descarte("local", local.detalhe || local.modalidade || "");
@@ -144,7 +167,7 @@ function classificar(vaga, ctx) {
   if (nivel.tipo === "desconhecido") return pista("nível não identificado");
   if (local.situacao === "desconhecido") return pista("local não informado");
 
-  return { resultado: "aprovada", nivel, local, alertas: alertasDeFormacao(vaga, ctx.perfil || {}) };
+  return { resultado: "aprovada", nivel, local, area, alertas: alertasDeFormacao(vaga, ctx.perfil || {}) };
 }
 
-module.exports = { classificar, detectarNivel, alertasDeFormacao, temLinkIndividual };
+module.exports = { classificar, detectarNivel, alertasDeFormacao, temLinkIndividual, areaDaVaga };

@@ -313,7 +313,7 @@ test("PF7: com o Doc configurado, o Radar usa a stack e o grau do Perfil (sem ch
   const config = configTemp(true, { GOOGLE_DOC_CV_BASE_URL: "https://docs.google.com/document/d/DOCFICTICIO/edit" });
   const resultado = resultadoVazio();
   await criarEtapaRadar({ conectores: [conectorComUmaVaga], clienteSheets: clienteSheetsFalso(), hoje: HOJE, lerTexto: async () => TEXTO_A })({ config, resultado, logs });
-  assert.strictEqual(resultado.aprovadas[0].pontos, 2 * 2 + 1); // React e Python do Perfil + nível Júnior
+  assert.strictEqual(resultado.aprovadas[0].pontos, 2 * 2 + 1 + 3); // React e Python do Perfil + nível Júnior + área de desenvolvimento
   assert.match(resultado.alertasFormacao.join(" "), /Bacharelado.*Licenciatura/);
   assert.deepStrictEqual(resultado.avisosPerfil.filter((a) => /Sem Perfil|indisponível/.test(a)), []);
 });
@@ -322,7 +322,7 @@ test("PF7: sem Doc configurado, o Radar avisa e segue com RADAR_STACK", async ()
   const config = configTemp(true, { RADAR_STACK: "React" });
   const resultado = resultadoVazio();
   await criarEtapaRadar({ conectores: [conectorComUmaVaga], clienteSheets: clienteSheetsFalso(), hoje: HOJE })({ config, resultado, logs });
-  assert.strictEqual(resultado.aprovadas[0].pontos, 2 + 1);
+  assert.strictEqual(resultado.aprovadas[0].pontos, 2 + 1 + 3); // React + nível Júnior + área de desenvolvimento
   assert.match(resultado.avisosPerfil.join(" "), /Sem Perfil: defina GOOGLE_DOC_CV_BASE_URL/);
 });
 

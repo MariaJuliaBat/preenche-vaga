@@ -35,7 +35,7 @@ de nenhuma fonte; só o `sheets.js` escreve na planilha. O Radar **não** abre f
 | **Local Elegível** | Remoto (Brasil) ou presencial/híbrido em Brasília - DF ou em uma Região Administrativa. | `localElegivel` |
 | **Vaga DF** | Vaga presencial ou híbrida em Brasília - DF ou RA. **Remoto não é Vaga DF.** | `ehVagaDF` |
 | **Região Administrativa (RA)** | Águas Claras, Asa Norte, Asa Sul, Taguatinga, Guará, Sobradinho, Gama, Samambaia, Vicente Pires, Sudoeste, Noroeste, Lago Norte, Lago Sul, Park Way. | `REGIOES_DF` |
-| **Nível Permitido** | Estágio, Júnior ou Trainee, em desenvolvimento ou tecnologia. | `NIVEIS_PERMITIDOS` |
+| **Nível Permitido** | Estágio, Júnior ou Trainee, em desenvolvimento ou em qualquer área de tecnologia (RD27). | `NIVEIS_PERMITIDOS` |
 | **Vigência** | Idade máxima da publicação (padrão 20 dias, configurável). | `RADAR_VIGENCIA_DIAS` |
 | **Tamanho do Lote** | Máximo de vagas no Lote Final por execução (padrão 10, configurável). | `MAX_VAGAS_LOTE` |
 | **Sinal de Golpe** | Pedido de pagamento, compra de curso, dado bancário ou documento sensível antecipado. | `sinaisDeGolpe` |
@@ -53,7 +53,9 @@ Termos a evitar: "vaga válida" (use **aprovada**), "local" sozinho (use **Local
 | # | Padrão | Requisito |
 |---|---|---|
 | **RD1** | Ubíquo | O Radar **deve** consumir fontes só por Conectores que expõem `nome` e `buscar({ foco })` e devolvem `VagaBruta[]`; trocar ou adicionar fonte **não deve** exigir mudança nas regras de classificação. |
-| **RD2** | Evento | **Quando** o Radar rodar, ele **deve** começar pelos Conectores de repositórios de vagas do GitHub (listas em Markdown e Issues, via API pública) e aceitar Conectores futuros (Gupy, Trampos.co, ProgramaThor, Vagas.com, LinkedIn) sem alterar o núcleo. |
+| **RD2** | Evento | **Quando** o Radar rodar, ele **deve** consultar os Conectores configurados em `RADAR_FONTES` (padrão: Gupy, LinkedIn, Indeed e repositórios de vagas do GitHub), com as fontes de busca focada em Brasília - DF antes do GitHub, e aceitar novos Conectores sem alterar o núcleo. |
+| **RD26** | Comportamento indesejado | **Se** uma fonte limitar, bloquear ou pedir verificação anti-robô (HTTP 403, 429, 999, "Security Check"), **então** o Conector **deve** parar, relatar a falha com a mensagem da fonte e deixar as demais seguirem; ele **não deve** insistir, trocar de identidade, disfarçar o navegador nem tentar resolver a verificação. A busca do LinkedIn é a pública (guest), sem login, para não expor a conta da Candidata. |
+| **RD27** | Evento | **Quando** a vaga for de Estágio, Júnior ou Trainee, o Radar **deve** aceitar, além de desenvolvimento, automação e IA (que pontuam mais, `PESOS.areaDesenvolvimento`), as demais áreas de TI: TI geral e sistemas, suporte técnico e service desk, infraestrutura, redes e cloud, dados, BI e banco de dados, QA e testes, RPA e segurança da informação. Termos genéricos só valem qualificados (ex.: "suporte ao cliente" e "redes sociais" continuam sendo "área"). Fora do nível de entrada, só vale desenvolvimento, automação e IA. |
 | **RD3** | Indesejado | **Se** um Conector falhar (rede, limite da API, formato inesperado), **então** o Radar **deve** registrar o erro no resumo, seguir com os demais Conectores e **não** inventar vagas. |
 | **RD4** | Evento | **Quando** a Vaga Bruta chegar, o Radar **deve** descartá-la se a URL Normalizada já estiver na coluna C da planilha ou repetida no próprio lote (Descarte com motivo "duplicada"). |
 
@@ -70,7 +72,7 @@ Ordem de avaliação: segurança, encerrada, vigência, nível, área, local, re
 | **RD9** | Indesejado | **Se** o nível identificado for Pleno, Sênior, Especialista, Tech Lead, Coordenador ou Gerente, **então** o Radar **deve** descartá-la com motivo "nível". Se o nível não puder ser identificado, **deve** registrar Pista (nunca aprovar por suposição). |
 | **RD10** | Indesejado | **Se** o Local não for Elegível (presencial ou híbrido fora do DF), **então** o Radar **deve** descartá-la com motivo "local". |
 | **RD11** | Indesejado | **Se** a vaga for voluntária ou não remunerada, **então** o Radar **deve** descartá-la com motivo "não remunerada", **exceto** quando o texto indicar bolsa ou pesquisa acadêmica. Não há piso salarial. |
-| **RD12** | Indesejado | **Se** a vaga não for de desenvolvimento ou tecnologia, **então** o Radar **deve** descartá-la com motivo "área". |
+| **RD12** | Indesejado | **Se** a vaga não for de tecnologia (ou for de TI geral e não de nível de entrada, RD27), **então** o Radar **deve** descartá-la com motivo "área". |
 | **RD13** | Indesejado | **Se** a vaga exigir um grau (Bacharelado ou Tecnólogo) diferente do registrado no Perfil, **então** o Radar **deve** manter a vaga, preencher o Alerta de Formação na coluna L e mostrá-lo no resumo. O texto do alerta usa o grau e a instituição **do Perfil**, nunca fixos no código (P11). |
 
 ### Pontuação
@@ -246,6 +248,8 @@ Funcionalidade: Radar de Vagas
 |---|---|---|
 | RD1, RD2 | — | `pipeline/radar/conectores/*.js`, contrato em `pipeline/radar/tipos.js` |
 | RD3 | Um Conector falha... | `pipeline/radar/index.js` |
+| RD26 | Uma fonte bloqueada não derruba as outras | `pipeline/radar/conectores/{gupy,linkedin,indeed,comum}.js`; `tests/pipeline/radar/conectores.test.js` |
+| RD27 | Estágio e Júnior em outras áreas de TI | `pipeline/radar/classificar.js` (`areaDaVaga`), `pesos.js`; `tests/pipeline/radar/conectores.test.js` |
 | RD4 | Vaga já registrada... | `normalizarUrl` (`pipeline/sheets.js`), `pipeline/radar/classificar.js` |
 | RD5, RD6 | Pedido de pagamento..., Instrução escondida... | `pipeline/radar/seguranca.js` |
 | RD7 a RD12, RD24, RD25 | Vigência, Sem data, Nível, Local, Voluntariado | `pipeline/radar/classificar.js` |
@@ -259,7 +263,8 @@ Cada linha "planejado" vira teste em `tests/pipeline/radar/`, com Vagas Brutas f
 
 ## 7. Fora do escopo (por enquanto)
 
-- Conectores de Gupy, Trampos.co, ProgramaThor, Vagas.com e LinkedIn: só o contrato (RD1, RD2) entra agora.
+- Conectores de Trampos.co (retirado), ProgramaThor, Vagas.com e InfoJobs: só o contrato (RD1, RD2).
+- Gupy (API JSON pública da própria página de busca), LinkedIn (busca guest) e Indeed (navegador) são Conectores. LinkedIn e Indeed bloqueiam acesso automatizado com frequência (RD26): o resumo mostra a falha e o Radar segue sem eles.
 - Raspagem de páginas sem API ou feed público; respeitar os termos de cada fonte é responsabilidade da Candidata.
 - Gerar currículo e preencher candidatura (Etapas `curriculo` e `candidatura`).
 - Decidir o tamanho máximo do Lote Final (a definir, ver pontos abertos).

@@ -42,21 +42,22 @@ test("portal desconhecido (inclusive LinkedIn, fora da automação) é recusado 
   assert.strictEqual(f.aberturas.length, 0);
 });
 
-test("A2: só Gupy e Trampos têm automação; nenhum Portal guarda credencial", () => {
-  assert.deepStrictEqual(Object.keys(PORTAIS).sort(), ["gupy", "trampos"]);
+test("A2: só Gupy, Indeed e InfoJobs têm login assistido (Trampos saiu, LinkedIn nunca entrou); nenhum Portal guarda credencial", () => {
+  assert.deepStrictEqual(Object.keys(PORTAIS).sort(), ["gupy", "indeed", "infojobs"]);
   for (const p of Object.values(PORTAIS)) assert.deepStrictEqual(Object.keys(p).sort(), ["dominios", "login", "nome"]);
 });
 
-test("portalDaUrl: Gupy e Trampos pelo domínio; o resto é formulário web padrão; domínio parecido não engana", () => {
+test("portalDaUrl: Gupy, Indeed e InfoJobs pelo domínio; o resto é formulário web padrão; domínio parecido não engana", () => {
   assert.strictEqual(portalDaUrl("https://empresa.gupy.io/jobs/123"), "gupy");
-  assert.strictEqual(portalDaUrl("https://trampos.co/oportunidades/1"), "trampos");
+  assert.strictEqual(portalDaUrl("https://br.indeed.com/viewjob?jk=abc"), "indeed");
+  assert.strictEqual(portalDaUrl("https://www.infojobs.com.br/vaga-de-x__123.aspx"), "infojobs");
+  assert.strictEqual(portalDaUrl("https://trampos.co/oportunidades/1"), null); // Trampos saiu da lista
   assert.strictEqual(portalDaUrl("https://forms.exemplo.com/vaga"), null);
   assert.strictEqual(portalDaUrl("https://gupy.io.malicioso.com/x"), null);
   assert.strictEqual(portalDaUrl("não é url"), null);
 });
 
-test("--login trampos abre o login de candidatos (/c/login), não a home nem o login de recrutadores", () => {
-  assert.strictEqual(PORTAIS.trampos.login, "https://trampos.co/c/login");
-  assert.strictEqual(portalDaUrl(PORTAIS.trampos.login), "trampos");
-  assert.strictEqual(portalDaUrl(PORTAIS.gupy.login), "gupy");
+test("o login de cada Portal fica no domínio do próprio Portal", () => {
+  for (const [chave, p] of Object.entries(PORTAIS)) assert.strictEqual(portalDaUrl(p.login), chave);
+  assert.strictEqual(PORTAIS.infojobs.login, "https://login.infojobs.com.br/Candidate");
 });
