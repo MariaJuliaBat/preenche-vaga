@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pipeline · Dashboard</title>
+  <link rel="stylesheet" href="/estilo.css">
+</head>
+<body>
+  <header class="topo">
+    <h1>Pipeline de Candidatura</h1>
+    <span id="modo" class="selo"></span>
+  </header>
+
+  <nav class="abas" role="tablist">
+    <button role="tab" data-aba="operar" aria-selected="true">Operar</button>
+    <button role="tab" data-aba="cota" aria-selected="false">Cota DF</button>
+    <button role="tab" data-aba="curriculos" aria-selected="false">Currículos</button>
+    <button role="tab" data-aba="auditoria" aria-selected="false">Auditoria <span id="contagem-auditoria" class="contagem"></span></button>
+  </nav>
+
+  <main>
+    <section id="aba-operar" class="painel">
+      <div class="cartao">
+        <h2>Executar</h2>
+        <p class="dica">Roda a CLI do Pipeline. Candidatura não é aberta por aqui.</p>
+        <label class="opcao"><input type="checkbox" id="simulacao" checked> Simulação (<code>--dry-run</code>): não escreve na planilha</label>
+        <div class="botoes">
+          <button id="rodar-radar" class="primario">Buscar vagas (Radar)</button>
+          <button id="rodar-cv" class="primario">Gerar currículos</button>
+        </div>
+        <p id="status-execucao" class="status" role="status"></p>
+        <pre id="saida" class="saida" aria-label="Saída da CLI"></pre>
+      </div>
+    </section>
+
+    <section id="aba-cota" class="painel" hidden>
+      <div class="cartao">
+        <h2>Cota Brasília - DF</h2>
+        <p class="dica">Pelo menos 50% do Lote Final deve ser de vagas presenciais ou híbridas em Brasília - DF.</p>
+        <div id="cota-resumo"></div>
+        <div class="barra" aria-hidden="true"><div id="cota-barra" class="barra-cheia"></div><div class="barra-meta"></div></div>
+        <p id="cota-legenda" class="dica"></p>
+        <ul id="lote" class="lista"></ul>
+      </div>
+    </section>
+
+    <section id="aba-curriculos" class="painel" hidden>
+      <div class="duas-colunas">
+        <div class="cartao">
+          <h2>PDFs gerados</h2>
+          <ul id="lista-pdfs" class="lista"></ul>
+        </div>
+        <div class="cartao visualizador">
+          <p id="pdf-vazio" class="dica">Escolha um currículo na lista.</p>
+          <iframe id="pdf" title="Currículo selecionado" hidden></iframe>
+        </div>
+      </div>
+    </section>
+
+    <section id="aba-auditoria" class="painel" hidden>
+      <div class="cartao">
+        <div class="sub-abas" role="tablist">
+          <button data-log="pendencias" aria-selected="true">Pendências</button>
+          <button data-log="pistas" aria-selected="false">Pistas</button>
+          <button data-log="descartes" aria-selected="false">Descartes</button>
+        </div>
+        <input id="filtro" type="search" placeholder="Filtrar por texto" aria-label="Filtrar registros">
+        <div id="motivos" class="motivos"></div>
+        <p id="auditoria-aviso" class="dica"></p>
+        <table class="tabela">
+          <thead><tr><th>Data</th><th>Vaga</th><th>Motivo</th><th>Fonte</th></tr></thead>
+          <tbody id="auditoria-corpo"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

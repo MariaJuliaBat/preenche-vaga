@@ -20,6 +20,7 @@ candidaturas, e só com `AUTO_SUBMIT=true` fora do `--dry-run`. Spec: docs/specs
 - popup/ — tela onde a pessoa cadastra o currículo (digitando ou importando um .docx em popup/importar-docx.js)
 - content/ — script que encontra e preenche os campos da página
 - pipeline/ — CLI Node.js (config, logs, resumo, sheets, radar/, perfil/, curriculo/; candidatura no próximo passo). Reaproveita content/mapeamento.js
+- dashboard/ — tela local (127.0.0.1) que opera o pipeline, mostra os PDFs, a Cota DF e a auditoria. Só lê output/ e chama a CLI (radar e cv); nunca candidatura. Spec: docs/specs/dashboard.md
 - paginas-teste/ — formulários falsos para testar sem usar sites reais
 
 ## Convenções
@@ -36,6 +37,7 @@ candidaturas, e só com `AUTO_SUBMIT=true` fora do `--dry-run`. Spec: docs/specs
 
 ## Comandos
 - `npm run pipeline -- --help` — CLI do pipeline (`--only-radar`, `--only-cv`, `--only-apply`, `--dry-run`)
+- `npm run dashboard` — Dashboard em http://127.0.0.1:4173
 - `npm test`, `npm run lint`, `npm run typecheck`
 - `npx serve paginas-teste` — sobe as páginas de teste em http://localhost:3000
 - Carregar a extensão: chrome://extensions → Modo do desenvolvedor →

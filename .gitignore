@@ -10,3 +10,6 @@ revisao.md
 secrets/
 output/
 token*.json
+
+# PDFs gerados só ficam em output/ (ignorado); nenhum PDF solto vai para o Git
+*.pdf
