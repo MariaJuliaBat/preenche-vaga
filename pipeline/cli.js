@@ -7,12 +7,14 @@
 //   npm run pipeline -- --only-cv       só o gerador de currículo
 //   npm run pipeline -- --only-apply    só a candidatura
 //   npm run pipeline -- --dry-run       simula: não envia e não escreve na planilha
+//   npm run pipeline -- --login gupy    abre o navegador para você entrar (gupy | trampos; sem nome, janela em branco)
 const { parseArgs } = require("node:util");
 const { ETAPAS, lerArquivoEnv, montarConfig, validar } = require("./config");
 const logs = require("./logs");
 const { resultadoVazio, formatarResumo } = require("./resumo");
 const { criarEtapaRadar } = require("./radar/etapa");
 const { criarEtapaCurriculo } = require("./curriculo/etapa");
+const { loginAssistido } = require("./apply/sessao");
 
 const AJUDA = `Uso: npm run pipeline -- [opções]
 
@@ -20,6 +22,8 @@ const AJUDA = `Uso: npm run pipeline -- [opções]
   --only-cv      roda só o gerador de currículo
   --only-apply   roda só o preenchimento/envio
   --dry-run      simula tudo: não envia candidatura e não escreve na planilha
+  --login [site] abre o navegador visível para você entrar à mão (gupy ou trampos; sem nome, em branco)
+                 e salva o login em output/sessao-navegador/. Use sozinho.
   -h, --help     mostra esta ajuda
 
 Sem opções de etapa, roda o pipeline completo. Configuração em .env (veja .env.example).
@@ -32,20 +36,27 @@ const IMPLEMENTADAS = { radar: criarEtapaRadar(), curriculo: criarEtapaCurriculo
 
 /**
  * @param {string[]} argv
- * @returns {{ etapas: string[], dryRun: boolean, ajuda: boolean }}
+ * @returns {{ etapas: string[], dryRun: boolean, ajuda: boolean, login: { portal: string | null } | null }}
  */
 function lerArgumentos(argv) {
-  const { values } = parseArgs({
+  const { values, positionals } = parseArgs({
     args: argv,
     options: {
       "only-radar": { type: "boolean" },
       "only-cv": { type: "boolean" },
       "only-apply": { type: "boolean" },
       "dry-run": { type: "boolean" },
+      login: { type: "boolean" },
       help: { type: "boolean", short: "h" }
     },
-    strict: true
+    strict: true,
+    allowPositionals: true
   });
+
+  // --login aceita no máximo um nome de portal (positional) e não combina com mais nada.
+  if (!values.login && positionals.length > 0) throw new Error(`Argumento inesperado: ${positionals[0]}`);
+  if (positionals.length > 1) throw new Error("--login aceita um portal por vez.");
+  if (values.login && (values["only-radar"] || values["only-cv"] || values["only-apply"] || values["dry-run"])) throw new Error("Use --login sozinho.");
 
   const escolhidas = [];
   if (values["only-radar"]) escolhidas.push("radar");
@@ -56,13 +67,14 @@ function lerArgumentos(argv) {
   return {
     etapas: escolhidas.length === 1 ? escolhidas : [...ETAPAS],
     dryRun: Boolean(values["dry-run"]),
-    ajuda: Boolean(values.help)
+    ajuda: Boolean(values.help),
+    login: values.login ? { portal: positionals[0] || null } : null
   };
 }
 
 /**
  * @param {string[]} argv
- * @param {{ env?: Record<string, string | undefined>, saida?: (texto: string) => void, etapas?: Record<string, (contexto: any) => Promise<void>> }} [io] `etapas` substitui as etapas reais (testes)
+ * @param {{ env?: Record<string, string | undefined>, saida?: (texto: string) => void, etapas?: Record<string, (contexto: any) => Promise<void>>, login?: typeof loginAssistido }} [io] `etapas` substitui as etapas reais (testes)
  * @returns {Promise<number>} código de saída
  */
 async function executar(argv, io = {}) {
@@ -76,6 +88,11 @@ async function executar(argv, io = {}) {
 
     // process.env vence o .env, como é o costume.
     const env = io.env || { ...lerArquivoEnv(), ...process.env };
+    if (args.login) {
+      // Login Assistido não precisa de planilha nem de Doc: só da pasta da Sessão.
+      await (io.login || loginAssistido)({ config: montarConfig(env), portal: args.login.portal, saida });
+      return 0;
+    }
     const config = montarConfig(env, { dryRun: args.dryRun });
     const erros = validar(config, env, args.etapas);
     if (erros.length > 0) {
