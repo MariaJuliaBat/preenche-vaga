@@ -14,6 +14,8 @@
  * @property {{ titulo: string, empresa: string, url: string, ehVagaDF: boolean, pontos: number }[]} aprovadas
  * @property {string[]} alertasFormacao
  * @property {{ conector: string, foco: string, erro: string }[]} falhasConectores
+ * @property {{ total: number, emBrasilia: number, remotas: number, porFonte: Record<string, number> } | null} aprovadasNoTotal tudo que passou na classificação, antes do corte do lote
+ * @property {{ conector: string, foco: string, vagas: number }[]} fontesDoRadar quantas vagas cada fonte que respondeu entregou, por busca
  * @property {boolean} segundaBusca o Radar precisou da segunda busca focada no DF
  * @property {number} gravadasNaPlanilha
  * @property {{ titulo: string, arquivo: string, avisos: string[], palavrasChave?: { casadas: string[], lacunas: string[] } }[]} curriculos PDFs sob medida gerados
@@ -40,6 +42,8 @@ const resultadoVazio = () => ({
   aprovadas: [],
   alertasFormacao: [],
   falhasConectores: [],
+  fontesDoRadar: [],
+  aprovadasNoTotal: null,
   segundaBusca: false,
   gravadasNaPlanilha: 0,
   curriculos: [],
@@ -95,6 +99,16 @@ function formatarResumo(r, modo) {
   }
   if (mostraRadar && r.encontradas > 0 && percentual < 50) {
     linhas.push("ATENÇÃO: abaixo de 50% DF: menos de 50% das vagas são de Brasília - DF (nenhuma vaga presencial de outra cidade foi incluída).");
+  }
+  if (mostraRadar && r.aprovadasNoTotal) {
+    const t = r.aprovadasNoTotal;
+    linhas.push(`Aprovadas na classificação (antes do corte do lote): ${t.total} (Brasília - DF ${t.emBrasilia}, remotas ${t.remotas}); por fonte: ${Object.entries(t.porFonte).map(([nome, n]) => `${nome} ${n}`).join(", ") || "nenhuma"}`);
+  }
+  if (mostraRadar && r.fontesDoRadar.length > 0) {
+    /** @type {Record<string, number>} */
+    const porFonte = {};
+    for (const c of r.fontesDoRadar) porFonte[c.conector] = (porFonte[c.conector] || 0) + c.vagas;
+    linhas.push(`Fontes que responderam: ${Object.entries(porFonte).map(([nome, n]) => `${nome} ${n}`).join(", ")}`);
   }
   for (const f of r.falhasConectores) linhas.push(`Falha no Conector ${f.conector} (busca ${f.foco}): ${f.erro}`);
   for (const alerta of r.alertasFormacao) linhas.push(`Alerta de formação — ${alerta}`);

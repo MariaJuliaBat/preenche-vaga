@@ -135,11 +135,11 @@ test("D15 e D16: candidatura começa em simulação; sem simulação exige confi
   await s.fechar();
 });
 
-test("D17: login abre o navegador por portal (gupy, trampos ou em branco); LinkedIn e outros são recusados; sem --dry-run", async () => {
+test("D17: login abre o navegador por portal (gupy, indeed, infojobs ou em branco); LinkedIn, Trampos e outros são recusados; sem --dry-run", async () => {
   const falso = spawnFalso();
   const s = await subir(ambiente(), criarExecutor({ spawnImpl: falso.impl }));
 
-  for (const portal of ["linkedin", "programathor", "../x"]) assert.strictEqual((await postar(s.base, { etapa: "login", portal })).status, 400, portal);
+  for (const portal of ["linkedin", "trampos", "programathor", "../x"]) assert.strictEqual((await postar(s.base, { etapa: "login", portal })).status, 400, portal);
   assert.strictEqual(falso.chamadas.length, 0);
 
   assert.strictEqual((await postar(s.base, { etapa: "login", portal: "gupy" })).status, 202);

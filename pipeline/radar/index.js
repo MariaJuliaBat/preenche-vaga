@@ -14,6 +14,7 @@ const { montarLote } = require("./lote");
  * @property {string[]} alertas
  * @property {string[]} ia termos de IA aplicada achados
  * @property {string[]} stack habilidades do Perfil achadas
+ * @property {"dev" | "ti" | null} area desenvolvimento/automação/IA ("dev") ou outra área de TI de nível de entrada ("ti")
  */
 
 /**
@@ -34,6 +35,8 @@ async function executarRadar(opcoes) {
 
   /** @type {{ conector: string, foco: string, erro: string }[]} */
   const falhas = [];
+  /** Quantas vagas cada fonte entregou em cada busca (só as que responderam). @type {{ conector: string, foco: string, vagas: number }[]} */
+  const coletas = [];
   /** @type {Aprovada[]} */
   const aprovadas = [];
   /** @type {Record<string, unknown>[]} */
@@ -51,6 +54,7 @@ async function executarRadar(opcoes) {
         const vagas = await conector.buscar({ foco });
         if (!Array.isArray(vagas)) throw new Error("o Conector não devolveu uma lista de vagas");
         for (const v of vagas) brutas.push({ ...v, fonte: v.fonte || conector.nome });
+        coletas.push({ conector: conector.nome, foco, vagas: vagas.length });
       } catch (erro) {
         // RD3: uma fonte que falha não derruba as outras.
         falhas.push({ conector: conector.nome, foco, erro: erro instanceof Error ? erro.message : String(erro) });
@@ -89,7 +93,7 @@ async function executarRadar(opcoes) {
         const p = pontuar(vaga, c, perfil);
         aprovadas.push({
           vaga, pontos: p.pontos, ehVagaDF: Boolean(c.local?.ehVagaDF), modalidade: c.local?.modalidade || null,
-          alertas: c.alertas || [], ia: p.ia, stack: p.stack
+          alertas: c.alertas || [], ia: p.ia, stack: p.stack, area: c.area || null
         });
       }
     }
@@ -108,7 +112,7 @@ async function executarRadar(opcoes) {
     montado = montarLote(aprovadas, maxLote);
   }
 
-  return { ...montado, segundaBusca, aprovadas, pistas, descartes, falhas };
+  return { ...montado, segundaBusca, aprovadas, pistas, descartes, falhas, coletas };
 }
 
 module.exports = { executarRadar };

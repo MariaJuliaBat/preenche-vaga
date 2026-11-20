@@ -59,7 +59,7 @@ Termos a evitar: "usuário" (use **Candidata**), "job" (use **Execução**).
 | **D14** | Opcional | **Onde** `pendencias.jsonl` ainda não existir (nenhuma candidatura parou numa Pendência ainda), o Dashboard **deve** mostrar a aba Pendências vazia, com a explicação. |
 | **D15** | Evento | **Quando** a Candidata clicar em "Candidatar", o Dashboard **deve** iniciar `pipeline/cli.js --only-apply --dry-run` (simulação), sem pedir nada além do clique. |
 | **D16** | Indesejado | **Se** a Simulação estiver desligada, **então** a tela **deve** exibir um painel de confirmação explícito (dizendo se `AUTO_SUBMIT` está ligado e que a candidatura pode ser enviada de verdade) e **só** depois do "Sim" enviar `confirmar: true` e `confirmarEnvioReal: true`; **se** o servidor receber a candidatura sem simulação e sem os dois, **então** **deve** recusar (400) e não iniciar nada. A tela não mostra a quantidade de vagas: ela não lê a planilha. |
-| **D17** | Evento | **Quando** a Candidata clicar em "Login no Gupy", "Login no Trampos" ou "Janela em branco", o Dashboard **deve** iniciar `pipeline/cli.js --login <portal>` (ou `--login`), sem `--dry-run`, e **deve** recusar qualquer outro portal (400). O Dashboard **nunca** vê a senha nem a sessão do navegador. |
+| **D17** | Evento | **Quando** a Candidata clicar em "Login no Gupy", "Login no Indeed", "Login no InfoJobs" ou "Janela em branco", o Dashboard **deve** iniciar `pipeline/cli.js --login <portal>` (ou `--login`), sem `--dry-run`, e **deve** recusar qualquer outro portal (400). O Dashboard **nunca** vê a senha nem a sessão do navegador. |
 
 ## 5. Cenários BDD
 

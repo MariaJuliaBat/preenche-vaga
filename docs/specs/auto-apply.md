@@ -32,7 +32,7 @@ Fronteiras:
 |---|---|---|
 | **Sessão** | Perfil persistente do navegador (cookies e logins) da Candidata, em `output/sessao-navegador/`. | `userDataDir` |
 | **Login Assistido** | Modo `--login`: abre o navegador visível para a Candidata entrar à mão num portal. O Pipeline nunca vê nem guarda a senha. | `apply/sessao.js` |
-| **Portal** | Site com automação própria de login e candidatura: **Gupy** e **Trampos**. Qualquer outro link de vaga é tratado como **formulário web padrão**, sem Portal. LinkedIn fica fora da automação e ProgramaThor, para uma expansão futura. | `PORTAIS` |
+| **Portal** | Site com login assistido e domínio permitido na candidatura: **Gupy**, **Indeed** e **InfoJobs** (o Trampos saiu da lista padrão). Qualquer outro link de vaga é tratado como **formulário web padrão**, sem Portal. LinkedIn fica fora da automação e ProgramaThor, para uma expansão futura. | `PORTAIS` |
 | **Aceite** | Checkbox de termos de uso, política de privacidade/LGPD ou declaração de veracidade. Só a Candidata marca. | `ehAceite` |
 | **Pergunta Aberta** | Campo dissertativo (`textarea` ou texto longo) que não casa com nenhum dado do Perfil. | `ehPerguntaAberta` |
 | **Pendência** | Candidatura pausada com motivo: Aceite, Pergunta Aberta, CAPTCHA/2FA, login expirado, campo obrigatório sem dado ou sem opção única. | `pendencias.jsonl` |
@@ -45,7 +45,7 @@ Fronteiras:
 
 | # | Padrão EARS | Requisito |
 |---|---|---|
-| **A1** | Orientado a evento | **Quando** a Candidata rodar `npm run pipeline -- --login <portal>` (ou clicar em "Fazer login" no Dashboard); sem `<portal>`, abre o navegador persistente em branco para login em qualquer site; com `gupy` ou `trampos`, abre direto na página de login do Portal, o Pipeline **deve** abrir o navegador **visível** com `userDataDir` em `output/sessao-navegador/`, na página de login do Portal, e aguardar a Candidata fechar a janela. |
+| **A1** | Orientado a evento | **Quando** a Candidata rodar `npm run pipeline -- --login <portal>` (ou clicar em "Fazer login" no Dashboard); sem `<portal>`, abre o navegador persistente em branco para login em qualquer site; com `gupy`, `indeed` ou `infojobs`, abre direto na página de login do Portal, o Pipeline **deve** abrir o navegador **visível** com `userDataDir` em `output/sessao-navegador/`, na página de login do Portal, e aguardar a Candidata fechar a janela. |
 | **A2** | Ubíquo | O Pipeline **não deve** pedir, ler, digitar, registrar ou guardar usuário e senha de Portal; o login é sempre feito pela Candidata na janela aberta. |
 | **A3** | Orientado a estado | **Enquanto** a Etapa `candidatura` rodar, o Pipeline **deve** usar o mesmo `userDataDir`, sem apagá-lo, para reaproveitar os logins. |
 | **A4** | Ubíquo | `output/sessao-navegador/` **deve** ficar fora do Git (já coberto por `output/`) e **nunca** ser lido pelo Dashboard, por logs ou pela Planilha. |
@@ -237,11 +237,11 @@ Testes: HTML **fictício** servido localmente a um Chrome/Edge real (Playwright)
 
 ## 8. Decisões da Candidata (aprovadas)
 
-1. **Portais:** começar por **Gupy** e **Trampos**, mais formulários web padrão dos links diretos das vagas. **LinkedIn fica fora da automação** (risco de bloqueio da conta pessoal); ProgramaThor, expansão futura.
+1. **Portais:** começar por **Gupy** e **Trampos**, mais formulários web padrão dos links diretos das vagas. *(Atualizado depois: o Trampos saiu e entraram **Indeed** e **InfoJobs**; "InfoJobs/Vagas.com" foi lido como InfoJobs.)* **LinkedIn fica fora da automação** (risco de bloqueio da conta pessoal); ProgramaThor, expansão futura.
 2. **Aceite (P26/A15):** mantido exatamente como está: preenche tudo, anexa o PDF, salva o Recibo e marca Pendência para a Candidata dar o aceite e enviar.
 3. **Dashboard:** pode disparar a Etapa `candidatura`, sempre começando com `--dry-run` marcado e com confirmação explícita para desligá-lo. `CLAUDE.md` e `docs/specs/dashboard.md` são atualizados.
 4. **Coluna L:** acrescentar ` | CV: <arquivo> | Recibo: <arquivo>` ao fim do texto existente.
-5. **`--login`:** um Portal por vez (`--login gupy`, `--login trampos`); sem argumento, navegador persistente em branco.
+5. **`--login`:** um Portal por vez (`--login gupy`, `--login indeed`, `--login infojobs`); sem argumento, navegador persistente em branco.
 
 ## 9. Limites conhecidos
 

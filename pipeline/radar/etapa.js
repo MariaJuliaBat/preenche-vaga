@@ -6,7 +6,7 @@ const { lerTextoDoc } = require("../google-docs");
 const { obterPerfil, perfilParaRadar } = require("../perfil");
 const { salvarLote } = require("../lote-arquivo");
 const { executarRadar } = require("./index");
-const { criarConectoresGithub } = require("./conectores/github");
+const { criarConectores } = require("./conectores");
 
 const ROTULO = { remoto: "Remoto", hibrido: "Híbrido", presencial: "Presencial" };
 const MAX_DESCRICAO_SALVA = 6000;
@@ -65,8 +65,7 @@ function criarEtapaRadar(deps = {}) {
   return async function etapaRadar(/** @type {{ config: any, resultado: any, logs: any }} */ { config, resultado, logs }) {
     const planilhaId = extrairIdGoogle(config.googleSheetUrl);
     const cliente = deps.clienteSheets || criarClienteSheets({ contaDeServico: config.contaDeServico });
-    const conectores = deps.conectores
-      || criarConectoresGithub({ repos: config.radar.reposGithub, token: config.radar.githubToken });
+    const conectores = deps.conectores || criarConectores(config);
 
     const { urlsExistentes } = await lerVagas(cliente, planilhaId);
     const perfil = await carregarPerfil(config, resultado, deps);
@@ -97,6 +96,14 @@ function criarEtapaRadar(deps = {}) {
     salvarLote(config, resultado.aprovadas);
     resultado.alertasFormacao = r.lote.flatMap((a) => a.alertas.map((alerta) => `${a.vaga.titulo}: ${alerta}`));
     resultado.falhasConectores = r.falhas;
+    resultado.fontesDoRadar = r.coletas;
+    // Tudo que passou na classificação, antes do corte do Lote Final (MAX_VAGAS_LOTE).
+    resultado.aprovadasNoTotal = {
+      total: r.aprovadas.length,
+      emBrasilia: r.aprovadas.filter((a) => a.ehVagaDF).length,
+      remotas: r.aprovadas.filter((a) => !a.ehVagaDF).length,
+      porFonte: Object.fromEntries(r.aprovadas.reduce((m, a) => m.set(a.vaga.fonte, (m.get(a.vaga.fonte) || 0) + 1), new Map()))
+    };
     resultado.segundaBusca = r.segundaBusca;
     resultado.gravadasNaPlanilha = gravacao.gravado ? gravacao.escritas : 0;
     resultado.pistas.push(...r.pistas);

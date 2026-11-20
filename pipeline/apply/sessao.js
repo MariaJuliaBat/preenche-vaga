@@ -2,10 +2,11 @@
 // execuções automáticas. O Pipeline abre a janela; a Candidata faz o login. Senha nunca passa por aqui (A2).
 const fs = require("node:fs");
 
-/** Portais com automação própria. LinkedIn fica de fora (risco para a conta); ProgramaThor, expansão futura. */
+/** Portais com login assistido e domínio permitido na candidatura. LinkedIn fica de fora (risco para a conta). O Trampos saiu da lista padrão. */
 const PORTAIS = Object.freeze({
   gupy: { nome: "Gupy", dominios: ["gupy.io"], login: "https://login.gupy.io/candidates/signin" },
-  trampos: { nome: "Trampos", dominios: ["trampos.co"], login: "https://trampos.co/c/login" }
+  indeed: { nome: "Indeed", dominios: ["indeed.com"], login: "https://secure.indeed.com/auth" },
+  infojobs: { nome: "InfoJobs", dominios: ["infojobs.com.br"], login: "https://login.infojobs.com.br/Candidate" }
 });
 
 /** @param {string} portal */

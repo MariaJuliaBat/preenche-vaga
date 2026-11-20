@@ -1,0 +1,326 @@
+// Conectores de busca (Gupy, LinkedIn, Indeed) e áreas de TI de nível de entrada. Sem rede: fetch e navegador FALSOS, dados fictícios.
+// ATENÇÃO: o formato da Gupy foi conferido numa chamada real. O HTML do LinkedIn e do Indeed NÃO pôde ser conferido ao vivo
+// (os dois bloquearam o acesso automatizado), então os fixtures abaixo seguem o formato conhecido e merecem conferência com o site real.
+const test = require("node:test");
+const assert = require("node:assert");
+const { criarConectorGupy } = require("../../../pipeline/radar/conectores/gupy");
+const { criarConectorLinkedin, lerCartoes } = require("../../../pipeline/radar/conectores/linkedin");
+const { criarConectorSolides } = require("../../../pipeline/radar/conectores/solides");
+const { criarConectorInfojobs, lerCartoesInfojobs, dataIso } = require("../../../pipeline/radar/conectores/infojobs");
+const { criarConectorIndeed, lerCartoesIndeed, diasAtras } = require("../../../pipeline/radar/conectores/indeed");
+const { criarConectores } = require("../../../pipeline/radar/conectores");
+const { TERMOS_DE_BUSCA, textoDoHtml } = require("../../../pipeline/radar/conectores/comum");
+const { classificar } = require("../../../pipeline/radar/classificar");
+const { pontuar } = require("../../../pipeline/radar/pontuar");
+const { montarConfig } = require("../../../pipeline/config");
+const { executarRadar } = require("../../../pipeline/radar/index");
+
+const HOJE = new Date("2026-11-20T12:00:00Z");
+const semPausa = async () => {};
+const CTX = { hoje: HOJE, vigenciaDias: 20 };
+
+const GUPY = (extra = {}) => ({
+  id: 1, name: "Estágio em Infraestrutura de TI", applicationDeadline: "2026-12-28T00:00:00.000Z", careerPageName: "Empresa Exemplo",
+  type: "vacancy_type_internship", publishedDate: "2026-11-18T16:04:54.929Z", workplaceType: "on-site", city: "Brasília", state: "Distrito Federal",
+  jobUrl: "https://exemplo.gupy.io/job/abc1?jobBoardSource=gupy_portal", description: "<p>Apoiar o suporte técnico&nbsp;(N1) e a rede.</p>", ...extra
+});
+
+function fetchFalso(respostas) {
+  const urls = [];
+  const impl = async (url) => {
+    urls.push(String(url));
+    const r = typeof respostas === "function" ? respostas(String(url), urls.length) : respostas;
+    return { ok: r.status ? r.status < 400 : true, status: r.status || 200, json: async () => r.json, text: async () => r.texto ?? "" };
+  };
+  return { impl, urls };
+}
+
+test("termos de busca: os pedidos para Estágio de TI e Júnior", () => {
+  assert.deepStrictEqual([...TERMOS_DE_BUSCA], ["estágio TI", "estágio tecnologia", "estágio desenvolvimento", "estágio programação", "desenvolvedor júnior", "analista de suporte estágio"]);
+});
+
+test("textoDoHtml: tira tags e resolve entidades", () => {
+  assert.strictEqual(textoDoHtml("<p>Suporte&nbsp;t&eacute;cnico &amp; redes</p><script>x()</script> &#233; &#x41;"), "Suporte t&eacute;cnico & redes é A");
+});
+
+test("Gupy: busca DF e remoto por termo na API pública, traduz estágio, modalidade e data, sem duplicar", async () => {
+  const f = fetchFalso((url) => ({ json: { data: url.includes("workplaceType=remote") ? [GUPY({ id: 2, jobUrl: "https://exemplo.gupy.io/job/remoto1", workplaceType: "remote", name: "Estágio Dev" })] : [GUPY()], pagination: {} } }));
+  const c = criarConectorGupy({ termos: ["estágio TI", "estágio tecnologia"], fetchImpl: f.impl, esperar: semPausa, agora: () => HOJE });
+  const vagas = await c.buscar({ foco: "geral" });
+  assert.strictEqual(f.urls.length, 4); // 2 termos x (DF + remoto)
+  assert.ok(f.urls.some((u) => u.includes("jobName=est%C3%A1gio%20TI") && u.includes("state=Distrito%20Federal")));
+  assert.ok(f.urls.some((u) => u.includes("workplaceType=remote")));
+  assert.deepStrictEqual(vagas.map((v) => v.url), ["https://exemplo.gupy.io/job/abc1?jobBoardSource=gupy_portal", "https://exemplo.gupy.io/job/remoto1"]); // sem repetidas
+  assert.deepStrictEqual([vagas[0].modalidade, vagas[0].nivel, vagas[0].local, vagas[0].empresa, vagas[0].fonte], ["presencial", "estágio", "Brasília - Distrito Federal", "Empresa Exemplo", "Gupy"]);
+  assert.strictEqual(vagas[0].descricao, "Apoiar o suporte técnico (N1) e a rede.");
+  assert.strictEqual(vagas[1].modalidade, "remoto");
+  assert.strictEqual(vagas[0].encerrada, false);
+});
+
+test("Gupy: foco DF só busca o Distrito Federal; prazo vencido marca encerrada; uma busca com erro não derruba as outras", async () => {
+  const f = fetchFalso((url, n) => (n === 1 ? { status: 500 } : { json: { data: [GUPY({ applicationDeadline: "2026-01-01T00:00:00.000Z" })] } }));
+  const c = criarConectorGupy({ termos: ["a", "b"], fetchImpl: f.impl, esperar: semPausa, agora: () => HOJE });
+  const vagas = await c.buscar({ foco: "df" });
+  assert.strictEqual(f.urls.length, 2);
+  assert.ok(f.urls.every((u) => u.includes("state=Distrito%20Federal") && !u.includes("remote")));
+  assert.strictEqual(vagas.length, 1);
+  assert.strictEqual(vagas[0].encerrada, true);
+  await assert.rejects(() => criarConectorGupy({ termos: ["a"], fetchImpl: fetchFalso({ status: 503 }).impl, esperar: semPausa }).buscar({ foco: "df" }), /Gupy respondeu 503/);
+});
+
+const CARTAO_LINKEDIN = (id, titulo, empresa, local, data) => `<li><div class="base-card base-search-card job-search-card" data-entity-urn="urn:li:jobPosting:${id}">
+  <a class="base-card__full-link" href="https://br.linkedin.com/jobs/view/estagio-ti-at-empresa-${id}?position=1&amp;pageNum=0&amp;refId=xyz&amp;trackingId=abc"><span class="sr-only">${titulo}</span></a>
+  <div class="base-search-card__info"><h3 class="base-search-card__title">
+      ${titulo}
+    </h3><h4 class="base-search-card__subtitle"><a class="hidden-nested-link" href="https://br.linkedin.com/company/x">${empresa}</a></h4>
+    <div class="base-search-card__metadata"><span class="job-search-card__location">${local}</span>
+      <time class="job-search-card__listdate" datetime="${data}">1 dia atrás</time></div></div></div></li>`;
+
+test("LinkedIn: lê os cartões da busca pública (link sem rastreio, empresa, local, data)", () => {
+  const html = CARTAO_LINKEDIN(111, "Estágio em TI", "Empresa A &amp; Cia", "Brasília, Federal District, Brazil", "2026-11-19") + "<li>sem link</li>";
+  const [v, ...resto] = lerCartoes(html, "presencial_ou_hibrido");
+  assert.strictEqual(resto.length, 0);
+  assert.deepStrictEqual(v, { titulo: "Estágio em TI", url: "https://br.linkedin.com/jobs/view/estagio-ti-at-empresa-111", empresa: "Empresa A & Cia", local: "Brasília, Federal District, Brazil", modalidade: undefined, publicadaEm: "2026-11-19", fonte: "LinkedIn" });
+  assert.strictEqual(lerCartoes(html, "remoto")[0].modalidade, "remoto");
+});
+
+test("LinkedIn: no máximo 2 buscas amplas por rodada (Brasília e remoto), na busca guest, 14 dias; pausa de 4 a 5 s; User-Agent do Pipeline", async () => {
+  const chamadas = [];
+  const impl = async (url, opcoes) => { chamadas.push({ url: String(url), ua: opcoes.headers["User-Agent"] }); return { ok: true, status: 200, text: async () => CARTAO_LINKEDIN(1, "Estágio TI", "A", "Brasília, Federal District, Brazil", "2026-11-19") }; };
+  const pausas = [];
+  const vagas = await criarConectorLinkedin({ fetchImpl: impl, esperar: async (ms) => { pausas.push(ms); }, aleatorio: () => 0.5 }).buscar({ foco: "geral" });
+  assert.strictEqual(chamadas.length, 2); // não é uma requisição por tecnologia nem por termo
+  assert.ok(chamadas[0].url.startsWith("https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?"));
+  assert.ok(chamadas[0].url.includes("keywords=est%C3%A1gio%20TI") && chamadas[0].url.includes("location=Bras%C3%ADlia%2C%20Federal%20District%2C%20Brazil") && chamadas[0].url.includes("f_TPR=r1209600"));
+  assert.ok(chamadas[1].url.includes("keywords=desenvolvedor%20j%C3%BAnior") && chamadas[1].url.includes("f_WT=2")); // remoto
+  assert.deepStrictEqual(pausas, [4500]); // 4 a 5 s entre as duas
+  assert.ok(chamadas.every((c) => c.ua === "pipeline-radar"), "identificado, sem se passar por navegador");
+  assert.strictEqual(vagas.length, 1); // a mesma vaga nas duas buscas não duplica
+});
+
+test("LinkedIn: foco DF faz só a busca de Brasília; nunca passa de 2 buscas mesmo com mais configuradas", async () => {
+  const f = fetchFalso({ texto: "" });
+  await criarConectorLinkedin({ fetchImpl: f.impl, esperar: semPausa }).buscar({ foco: "df" });
+  assert.strictEqual(f.urls.length, 1);
+  const g = fetchFalso({ texto: "" });
+  const tres = [0, 1, 2].map((i) => ({ palavras: `t${i}`, local: "Brazil", wt: "2", tipo: "remoto" }));
+  await criarConectorLinkedin({ buscas: tres, fetchImpl: g.impl, esperar: semPausa }).buscar({ foco: "geral" });
+  assert.strictEqual(g.urls.length, 2);
+});
+
+test("LinkedIn: 429 espera 10 s e tenta UMA vez; se passar, segue; se limitar de novo, PARA e relata", async () => {
+  const pausas = [];
+  const esperar = async (ms) => { pausas.push(ms); };
+  const respostas = [429, 200, 200];
+  let n = 0;
+  const impl = async () => { const status = respostas[n++]; return { ok: status === 200, status, text: async () => CARTAO_LINKEDIN(7, "Estágio TI", "A", "Brasília, Federal District, Brazil", "2026-11-19") }; };
+  const vagas = await criarConectorLinkedin({ fetchImpl: impl, esperar, aleatorio: () => 0 }).buscar({ foco: "geral" });
+  assert.strictEqual(n, 3); // 429, nova tentativa (200), segunda busca (200)
+  assert.deepStrictEqual(pausas, [10000, 4000]);
+  assert.strictEqual(vagas.length, 1);
+
+  const f = fetchFalso({ status: 429 });
+  await assert.rejects(() => criarConectorLinkedin({ fetchImpl: f.impl, esperar: semPausa }).buscar({ foco: "geral" }), /Não contorno esse limite/);
+  assert.strictEqual(f.urls.length, 2, "429 duas vezes: uma tentativa e uma nova, nada além disso");
+});
+
+test("LinkedIn: 999 e 403 PARAM de imediato (sem nova tentativa)", async () => {
+  for (const status of [999, 403]) {
+    const f = fetchFalso({ status });
+    await assert.rejects(() => criarConectorLinkedin({ fetchImpl: f.impl, esperar: semPausa }).buscar({ foco: "geral" }), /Não contorno esse limite/);
+    assert.strictEqual(f.urls.length, 1, `HTTP ${status}: uma requisição só`);
+  }
+});
+
+// Estrutura do cartão da Sólides conferida numa chamada real; os dados abaixo são fictícios.
+const SOLIDES = (extra = {}) => ({
+  id: 900001, title: "Estágio em Desenvolvimento", companyName: "Empresa Exemplo", description: "<p>Apoiar o time de <b>software</b>.</p>",
+  city: { name: "Brasília" }, state: { code: "DF" }, jobType: "presencial", seniority: [{ name: "Estagiário" }], recruitmentContractType: [{ name: "Estágio" }],
+  createdAt: "2026-11-19", currentState: "em_andamento", date: { due: "2026-12-30" }, redirectLink: "https://quebrado./vacancies/1", ...extra
+});
+
+test("Sólides: API pública, só Brasília - DF, link /vaga/<id>, modalidade, senioridade e data; encerrada e repetida", async () => {
+  const f = fetchFalso(() => ({ json: { count: 2, data: [SOLIDES(), SOLIDES({ id: 900002, title: "Estágio Híbrido", jobType: "hibrido", currentState: "encerrada" })] } }));
+  const vagas = await criarConectorSolides({ termos: ["estágio TI", "desenvolvedor júnior"], fetchImpl: f.impl, esperar: semPausa, agora: () => HOJE }).buscar({ foco: "geral" });
+  assert.strictEqual(f.urls.length, 2);
+  assert.ok(f.urls[0].startsWith("https://vagas.solides.com.br/api/vacancies?") && f.urls[0].includes("title=est%C3%A1gio+TI") && f.urls[0].includes("locations=Bras%C3%ADlia+-+DF"));
+  assert.strictEqual(vagas.length, 2); // as mesmas duas vagas nas duas buscas não duplicam
+  assert.deepStrictEqual([vagas[0].url, vagas[0].empresa, vagas[0].local, vagas[0].modalidade, vagas[0].nivel, vagas[0].publicadaEm, vagas[0].encerrada, vagas[0].fonte],
+    ["https://vagas.solides.com.br/vaga/900001", "Empresa Exemplo", "Brasília - DF", "presencial", "Estagiário", "2026-11-19", false, "Sólides"]);
+  assert.strictEqual(vagas[0].descricao, "Apoiar o time de software.");
+  assert.deepStrictEqual([vagas[1].modalidade, vagas[1].encerrada], ["hibrido", true]);
+});
+
+test("Sólides: erro em todas as buscas é relatado; em uma só, segue com o resto", async () => {
+  await assert.rejects(() => criarConectorSolides({ termos: ["a"], fetchImpl: fetchFalso({ status: 500 }).impl, esperar: semPausa }).buscar({ foco: "df" }), /Sólides respondeu 500/);
+  const f = fetchFalso((url, n) => (n === 1 ? { status: 500 } : { json: { data: [SOLIDES()] } }));
+  assert.strictEqual((await criarConectorSolides({ termos: ["a", "b"], fetchImpl: f.impl, esperar: semPausa }).buscar({ foco: "df" })).length, 1);
+});
+
+// Estrutura do cartão do InfoJobs conferida na página real (inclusive o ">" dentro de atributos de tooltip); dados fictícios.
+const CARTAO_INFOJOBS = (id, slug, titulo, empresaHtml, local, chips, data) => `<div data-typesimilar="" class="card card-shadow js_rowCard active">
+  <div id="vacancy${id}" data-id="${id}" class="pt-24 px-24 cursor-pointer js_vacancyLoad js_cardLink" data-href="/vaga-de-${slug}-em-__${id}.aspx">
+    <div hidden class="js_date" data-value="${data}"><div class="tag"><span> NOVA </span></div></div>
+    <div class="d-flex gap-8 justify-content-between"><a class="text-decoration-none" href="/vaga-de-${slug}-em-__${id}.aspx"><h2 class="h3 js_vacancyTitle"> ${titulo} </h2></a>
+      <div class="text-medium small text-nowrap"> Ontem </div></div>
+    <div class="d-flex align-items-baseline"><div class="text-body"><a class="text-body text-decoration-none" href="https://www.infojobs.com.br/empresa">${empresaHtml}</a></div></div>
+    <div class="mb-8"> ${local} </div>
+    <div class="d-inline-flex flex-wrap mb-8 text-medium" style="gap: 2px 16px">${chips.map((c) => `<div> ${c} </div>`).join(" ")}</div>
+    <div class="text-medium"> Sobre a vaga: você vai apoiar o time de suporte e infraestrutura de TI... </div>
+  </div></div>`;
+const TOOLTIP = `<span class="text-nowrap"> LTDA. <span data-bs-toggle="tooltip" data-bs-title="<div class='t'>Selo <a href='https://x.exemplo'>saiba</a></div>" title="<div>x</div>"><svg class="i"><use xlink:href="#v"/></svg></span></span>`;
+
+test("InfoJobs: lê os cartões (título, empresa com tooltip, local, modalidade pelos chips, data) e descarta o resto", () => {
+  const html = CARTAO_INFOJOBS(111, "estagio-ti", "Estágio TI", `EMPRESA EXEMPLO ${TOOLTIP}`, "Brasília - DF", ["A combinar", "Ensino Superior", "Presencial"], "2026/11/19 06:31:00")
+    + CARTAO_INFOJOBS(222, "dev-junior", "Dev Júnior", "OUTRA", "Todo Brasil", ["Home office"], "2026/11/10 00:00:00");
+  const [a, b, ...resto] = lerCartoesInfojobs(html);
+  assert.strictEqual(resto.length, 0);
+  assert.deepStrictEqual([a.titulo, a.url, a.empresa, a.local, a.modalidade, a.publicadaEm, a.fonte],
+    ["Estágio TI", "https://www.infojobs.com.br/vaga-de-estagio-ti-em-__111.aspx", "EMPRESA EXEMPLO LTDA.", "Brasília - DF", "presencial", "2026-11-19T06:31:00", "InfoJobs"]);
+  assert.deepStrictEqual(a.rotulos, ["A combinar", "Ensino Superior", "Presencial"]);
+  assert.match(a.descricao, /suporte e infraestrutura de TI/);
+  assert.deepStrictEqual([b.modalidade, b.local], ["remoto", "Todo Brasil"]);
+  assert.strictEqual(dataIso("2026/11/19"), "2026-11-19T00:00:00");
+});
+
+test("InfoJobs: busca por cidade, uma página por termo, User-Agent do Pipeline; 403/429 PARAM e relatam", async () => {
+  const chamadas = [];
+  const impl = async (url, opcoes) => { chamadas.push({ url: String(url), ua: opcoes.headers["User-Agent"] }); return { ok: true, status: 200, text: async () => CARTAO_INFOJOBS(1, "a", "Estágio TI", "X", "Brasília - DF", ["Presencial"], "2026/11/19 00:00:00") }; };
+  const vagas = await criarConectorInfojobs({ termos: ["estágio TI", "desenvolvedor júnior"], fetchImpl: impl, esperar: semPausa }).buscar({ foco: "geral" });
+  assert.deepStrictEqual(chamadas.map((c) => c.url), [
+    "https://www.infojobs.com.br/vagas-de-emprego-estagio+ti-em-brasilia,-df.aspx",
+    "https://www.infojobs.com.br/vagas-de-emprego-desenvolvedor+junior-em-brasilia,-df.aspx"
+  ]);
+  assert.ok(chamadas.every((c) => c.ua === "pipeline-radar"));
+  assert.strictEqual(vagas.length, 1);
+  for (const status of [403, 429]) {
+    const f = fetchFalso({ status });
+    await assert.rejects(() => criarConectorInfojobs({ termos: ["a", "b"], fetchImpl: f.impl, esperar: semPausa }).buscar({ foco: "df" }), /Não contorno esse limite/);
+    assert.strictEqual(f.urls.length, 1);
+  }
+});
+
+const CARTAO_INDEED = (jk, titulo, empresa, local, data) => `<div class="job_seen_beacon"><table><tr><td><h2 class="jobTitle"><a data-jk="${jk}" href="/rc/clk?jk=${jk}"><span title="${titulo}">${titulo}</span></a></h2>
+  <span data-testid="company-name">${empresa}</span><div data-testid="text-location">${local}</div>
+  <div class="job-snippet"><ul><li>Apoiar o suporte técnico</li></ul></div><span class="date">${data}</span></td></tr></table></div>`;
+
+test("Indeed: diasAtras lê 'há N dias', 'hoje' e 'mais de 30'", () => {
+  assert.strictEqual(diasAtras("Publicada há 3 dias"), 3);
+  assert.strictEqual(diasAtras("Postado há 1 dia"), 1);
+  assert.strictEqual(diasAtras("Hoje"), 0);
+  assert.strictEqual(diasAtras("Publicada há mais de 30 dias"), 31);
+  assert.strictEqual(diasAtras("sem data"), null);
+});
+
+test("Indeed: lê os cartões (link /viewjob?jk=, data aproximada; sem data vale o filtro de 14 dias)", () => {
+  const html = CARTAO_INDEED("abc123def4", "Estágio em TI", "Empresa B", "Brasília, DF", "Publicada há 3 dias") + CARTAO_INDEED("fff999", "Estágio Dev", "Empresa C", "Remoto", "");
+  const [a, b] = lerCartoesIndeed(html, HOJE, "presencial_ou_hibrido");
+  assert.deepStrictEqual([a.titulo, a.url, a.empresa, a.local, a.descricao, a.fonte], ["Estágio em TI", "https://br.indeed.com/viewjob?jk=abc123def4", "Empresa B", "Brasília, DF", "Apoiar o suporte técnico", "Indeed"]);
+  assert.strictEqual(a.publicadaEm, "2026-11-17T12:00:00.000Z");
+  assert.strictEqual(b.publicadaEm, "2026-11-06T12:00:00.000Z"); // 14 dias
+});
+
+function navegadorFalso(paginas) {
+  let n = 0;
+  const estado = { fechou: false, urls: [] };
+  const pagina = {
+    goto: async (url) => { estado.urls.push(url); const p = paginas[Math.min(n++, paginas.length - 1)]; pagina.atual = p; return { status: () => p.status }; },
+    title: async () => pagina.atual.titulo,
+    content: async () => pagina.atual.html
+  };
+  return { estado, abrir: async () => ({ newPage: async () => pagina, close: async () => { estado.fechou = true; } }) };
+}
+
+test("Indeed: busca por termo em Brasília e Remoto com fromage=14 e sempre fecha o navegador", async () => {
+  const n = navegadorFalso([{ status: 200, titulo: "Vagas - Indeed", html: CARTAO_INDEED("aaa1", "Estágio TI", "X", "Brasília, DF", "Hoje") }]);
+  const vagas = await criarConectorIndeed({ termos: ["estágio TI"], abrir: n.abrir, esperar: semPausa, agora: () => HOJE }).buscar({ foco: "geral" });
+  assert.strictEqual(n.estado.urls.length, 2);
+  assert.match(n.estado.urls[0], /^https:\/\/br\.indeed\.com\/jobs\?q=est%C3%A1gio\+TI&l=Bras%C3%ADlia%2C\+DF&fromage=14/);
+  assert.match(n.estado.urls[1], /&l=Remoto&fromage=14/);
+  assert.strictEqual(vagas.length, 1);
+  assert.strictEqual(n.estado.fechou, true);
+});
+
+test("Indeed: verificação anti-robô (403 / 'Blocked' / 'Security Check') PARA, relata e fecha o navegador; não tenta de novo", async () => {
+  for (const pagina of [{ status: 403, titulo: "Blocked - Indeed.com", html: "" }, { status: 200, titulo: "Security Check - Indeed.com", html: "" }]) {
+    const n = navegadorFalso([pagina]);
+    await assert.rejects(() => criarConectorIndeed({ termos: ["a", "b"], abrir: n.abrir, esperar: semPausa }).buscar({ foco: "geral" }), /verificação anti-robô.*Não contorno/);
+    assert.strictEqual(n.estado.urls.length, 1);
+    assert.strictEqual(n.estado.fechou, true);
+  }
+});
+
+test("RADAR_FONTES: padrão com as fontes abertas primeiro; escolher e ordenar; fonte desconhecida é erro (Trampos incluso)", () => {
+  assert.deepStrictEqual(montarConfig({}).radar.fontes, ["gupy", "solides", "infojobs", "linkedin", "indeed", "github"]);
+  assert.deepStrictEqual(montarConfig({ RADAR_FONTES: " Gupy , github,gupy" }).radar.fontes, ["gupy", "github"]);
+  assert.throws(() => montarConfig({ RADAR_FONTES: "gupy,trampos" }), /fonte desconhecida \("trampos"\)/);
+});
+
+test("criarConectores segue RADAR_FONTES e põe as fontes de Brasília antes do GitHub", () => {
+  const nomes = (env) => criarConectores(montarConfig(env)).map((c) => c.nome);
+  assert.deepStrictEqual(nomes({ RADAR_REPOS_GITHUB: "a/b" }), ["Gupy", "Sólides", "InfoJobs", "LinkedIn", "Indeed", "GitHub (a/b)"]);
+  assert.deepStrictEqual(nomes({ RADAR_FONTES: "github,gupy", RADAR_REPOS_GITHUB: "a/b" }), ["GitHub (a/b)", "Gupy"]);
+});
+
+test("uma fonte bloqueada não derruba as outras: aparece em falhas e as vagas das demais seguem", async () => {
+  const bloqueado = { nome: "Indeed", buscar: async () => { throw new Error("O Indeed pediu verificação anti-robô (HTTP 403)."); } };
+  const gupy = { nome: "Gupy", buscar: async () => [{ titulo: "Estágio em TI", url: "https://exemplo.gupy.io/job/1", empresa: "X", local: "Brasília - Distrito Federal", modalidade: "presencial", nivel: "estágio", publicadaEm: "2026-11-18T00:00:00Z", fonte: "Gupy" }] };
+  const r = await executarRadar({ conectores: [bloqueado, gupy], hoje: HOJE });
+  assert.deepStrictEqual(r.falhas.map((f) => f.conector), ["Indeed"]); // a cota DF já fechou: sem segunda busca
+  assert.strictEqual(r.aprovadas.length, 1);
+  assert.strictEqual(r.aprovadas[0].ehVagaDF, true);
+});
+
+// ---- Estágio e Júnior em outras áreas de TI ----
+
+const vaga = (titulo, extra = {}) => ({ titulo, url: `https://exemplo.gupy.io/job/${encodeURIComponent(titulo)}`, descricao: "", publicadaEm: "2026-11-18T00:00:00Z", local: "Brasília - Distrito Federal", modalidade: "presencial", fonte: "t", ...extra });
+
+test("Estágio e Júnior aceitam as áreas de TI pedidas (dev, TI geral, suporte, infra, dados, QA, RPA, IA, segurança)", () => {
+  const aceitas = [
+    "Estágio em Desenvolvimento Full-Stack", "Estágio Back-End", "Estágio Front-End", "Estágio Mobile", "Estagiário de Software",
+    "Estágio em Tecnologia da Informação", "Estágio em Sistemas", "Estágio Analista de Sistemas",
+    "Estágio em Suporte Técnico", "Estágio Service Desk", "Estágio em Infraestrutura", "Estágio em Redes de Computadores", "Estágio Cloud",
+    "Estágio em Dados", "Estágio em BI", "Estágio em Análise de Dados", "Estágio em Banco de Dados",
+    "Estágio em QA", "Estágio em Testes de Software", "Estágio em Automação", "Estágio RPA", "Estágio em IA Aplicada", "Estágio em Segurança da Informação",
+    "Analista de Suporte Júnior", "Analista de Infraestrutura Júnior", "Analista de BI Júnior"
+  ];
+  for (const t of aceitas) assert.strictEqual(classificar(vaga(t), CTX).resultado, "aprovada", t);
+});
+
+test("fora de TI continua descartado, inclusive com palavra parecida (suporte ao cliente, redes sociais)", () => {
+  for (const t of ["Estágio em Marketing", "Estágio em Suporte ao Cliente", "Estágio em Redes Sociais", "Estágio em Atendimento ao Cliente", "Estágio em Direito", "Estágio em Recursos Humanos"]) {
+    const c = classificar(vaga(t), CTX);
+    assert.deepStrictEqual([c.resultado, c.motivo], ["descarte", "área"], t);
+  }
+});
+
+test("outras áreas de TI só valem em nível de entrada: sem Estágio/Júnior no título não é aceita como TI geral", () => {
+  const sem = classificar(vaga("Analista de Suporte Técnico"), CTX); // nível não identificado
+  assert.deepStrictEqual([sem.resultado, sem.motivo], ["descarte", "área"]);
+  assert.strictEqual(classificar(vaga("Analista de Suporte Técnico Júnior"), CTX).resultado, "aprovada");
+  const pleno = classificar(vaga("Analista de Suporte Técnico Pleno"), CTX); // nível bloqueado continua valendo
+  assert.deepStrictEqual([pleno.resultado, pleno.motivo], ["descarte", "nível"]);
+});
+
+test("pontuação: desenvolvimento/automação/IA ganha +3 sobre outra área de TI no mesmo nível e local", () => {
+  const dev = classificar(vaga("Estágio em Desenvolvimento"), CTX);
+  const suporte = classificar(vaga("Estágio em Suporte Técnico"), CTX);
+  const rpa = classificar(vaga("Estágio em Automação RPA"), CTX);
+  assert.deepStrictEqual([dev.area, suporte.area, rpa.area], ["dev", "ti", "dev"]);
+  const p = (c, titulo) => pontuar(vaga(titulo), c).pontos;
+  assert.strictEqual(p(dev, "Estágio em Desenvolvimento") - p(suporte, "Estágio em Suporte Técnico"), 3);
+  assert.strictEqual(p(rpa, "Estágio em Automação RPA"), p(dev, "Estágio em Desenvolvimento"));
+});
+
+test("resumo do Radar: mostra as fontes que responderam, o total aprovado antes do corte (DF x remoto) e as falhas", () => {
+  const { resultadoVazio, formatarResumo } = require("../../../pipeline/resumo");
+  const r = resultadoVazio();
+  r.etapasRodadas.push("radar");
+  r.fontesDoRadar = [{ conector: "Gupy", foco: "geral", vagas: 10 }, { conector: "Gupy", foco: "df", vagas: 5 }, { conector: "Sólides", foco: "geral", vagas: 7 }];
+  r.aprovadasNoTotal = { total: 4, emBrasilia: 3, remotas: 1, porFonte: { Gupy: 3, "Sólides": 1 } };
+  r.falhasConectores = [{ conector: "Indeed", foco: "geral", erro: "bloqueado" }];
+  const texto = formatarResumo(r, { dryRun: true, enviarCandidatura: false });
+  assert.match(texto, /Aprovadas na classificação \(antes do corte do lote\): 4 \(Brasília - DF 3, remotas 1\); por fonte: Gupy 3, Sólides 1/);
+  assert.match(texto, /Fontes que responderam: Gupy 15, Sólides 7/);
+  assert.match(texto, /Falha no Conector Indeed/);
+});
