@@ -19,6 +19,7 @@ const PerfilSchema = z.object({
     instituicao: texto,
     curso: texto,
     grau: texto,
+    sigla: texto.default(null),
     status: texto,
     previsaoConclusao: texto
   })),
@@ -28,7 +29,9 @@ const PerfilSchema = z.object({
     organizacao: texto,
     periodo: texto,
     descricao: z.array(z.string()),
-    tecnologias: z.array(z.string())
+    tecnologias: z.array(z.string()),
+    // Links do item ("Repositório: github.com/...", "Notícia: ..."), com a URL exata do Doc.
+    links: z.array(z.object({ rotulo: z.string(), url: z.string() })).default([])
   })),
   habilidades: z.object({
     tecnicas: z.array(z.string()),

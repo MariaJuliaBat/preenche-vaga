@@ -57,15 +57,15 @@ const PERFIL = {
     nome: "Maria Exemplo", email: "maria.exemplo@exemplo.com", telefone: "(61) 99999-0000", cidade: "Brasília", estado: "DF",
     regiaoAdministrativa: null, linkedin: "https://www.linkedin.com/in/maria-exemplo", github: "https://github.com/mariaexemplo", portfolio: null
   },
-  formacao: [{ instituicao: "Universidade Exemplo", curso: "Computação", grau: "Licenciatura", status: "cursando", previsaoConclusao: "12/2029" }],
+  formacao: [{ instituicao: "Universidade Exemplo", curso: "Computação", grau: "Licenciatura", sigla: null, status: "cursando", previsaoConclusao: "12/2029" }],
   experiencias: [
     {
       tipo: "experiencia", titulo: "Estagiária de Desenvolvimento", organizacao: "Acme Exemplo", periodo: "2024 - 2025",
-      descricao: ["Criei telas em React para o painel interno.", "Automatizei relatórios com Python."], tecnologias: ["React", "Python"]
+      descricao: ["Criei telas em React para o painel interno.", "Automatizei relatórios com Python."], tecnologias: ["React", "Python"], links: []
     },
     {
       tipo: "projeto", titulo: "Gerenciador de Tarefas", organizacao: null, periodo: "2025",
-      descricao: ["API REST em Node.js e Express com MySQL."], tecnologias: ["Node.js", "Express", "MySQL"]
+      descricao: ["API REST em Node.js e Express com MySQL."], tecnologias: ["Node.js", "Express", "MySQL"], links: []
     }
   ],
   habilidades: { tecnicas: ["JavaScript", "React", "Node.js", "Express", "Python", "MySQL"], ferramentas: [], idiomas: ["Inglês intermediário"] }
