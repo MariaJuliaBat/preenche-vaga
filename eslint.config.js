@@ -14,10 +14,15 @@ module.exports = [
   },
   {
     // Scripts de build e testes: rodam no Node.
-    files: ["scripts/**/*.js", "pipeline/**/*.js", "tests/**/*.js", "eslint.config.js"],
+    files: ["scripts/**/*.js", "pipeline/**/*.js", "dashboard/*.js", "tests/**/*.js", "eslint.config.js"],
     languageOptions: {
       sourceType: "commonjs",
       globals: globals.node
     }
+  },
+  {
+    // Front-end do Dashboard: script clássico no navegador.
+    files: ["dashboard/public/**/*.js"],
+    languageOptions: { sourceType: "script", globals: globals.browser }
   }
 ];
