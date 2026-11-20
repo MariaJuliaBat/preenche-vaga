@@ -54,3 +54,9 @@ test("portalDaUrl: Gupy e Trampos pelo domínio; o resto é formulário web padr
   assert.strictEqual(portalDaUrl("https://gupy.io.malicioso.com/x"), null);
   assert.strictEqual(portalDaUrl("não é url"), null);
 });
+
+test("--login trampos abre o login de candidatos (/c/login), não a home nem o login de recrutadores", () => {
+  assert.strictEqual(PORTAIS.trampos.login, "https://trampos.co/c/login");
+  assert.strictEqual(portalDaUrl(PORTAIS.trampos.login), "trampos");
+  assert.strictEqual(portalDaUrl(PORTAIS.gupy.login), "gupy");
+});

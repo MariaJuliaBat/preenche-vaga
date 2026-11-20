@@ -5,7 +5,7 @@ const fs = require("node:fs");
 /** Portais com automação própria. LinkedIn fica de fora (risco para a conta); ProgramaThor, expansão futura. */
 const PORTAIS = Object.freeze({
   gupy: { nome: "Gupy", dominios: ["gupy.io"], login: "https://login.gupy.io/candidates/signin" },
-  trampos: { nome: "Trampos", dominios: ["trampos.co"], login: "https://trampos.co/" }
+  trampos: { nome: "Trampos", dominios: ["trampos.co"], login: "https://trampos.co/c/login" }
 });
 
 /** @param {string} portal */
