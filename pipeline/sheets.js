@@ -232,7 +232,8 @@ async function lerLinhasDeVagas(cliente, planilhaId) {
     url: String(l[2] ?? ""),
     empresa: String(l[3] ?? ""),
     situacao: String(l[8] ?? ""),
-    motivo: String(l[10] ?? "")
+    motivo: String(l[10] ?? ""),
+    observacoes: String(l[11] ?? "")
   }));
 }
 
@@ -243,7 +244,8 @@ async function lerLinhasDeVagas(cliente, planilhaId) {
  */
 async function lerPendentesDeCurriculo(cliente, planilhaId) {
   const linhas = await lerLinhasDeVagas(cliente, planilhaId);
-  return linhas.filter((l) => normalizar(l.situacao) === "se candidatar" && l.url.trim() !== "" && !normalizar(l.motivo).startsWith("cv gerado"));
+  // Quem já tem CV ("CV gerado...") ou já parou numa Pendência de candidatura não precisa de currículo de novo.
+  return linhas.filter((l) => normalizar(l.situacao) === "se candidatar" && l.url.trim() !== "" && !/^(cv gerado|pendencia)/.test(normalizar(l.motivo)));
 }
 
 /**
@@ -261,7 +263,46 @@ async function marcarCurriculoGerado(cliente, planilhaId, url) {
   return true;
 }
 
+/**
+ * Vagas para a Etapa candidatura: coluna I = "Se candidatar" e com link. Quem já está "Candidatura enviada" não volta (A28).
+ * @param {ClienteSheets} cliente
+ * @param {string} planilhaId
+ */
+async function lerVagasParaCandidatar(cliente, planilhaId) {
+  const linhas = await lerLinhasDeVagas(cliente, planilhaId);
+  return linhas.filter((l) => normalizar(l.situacao) === "se candidatar" && l.url.trim() !== "");
+}
+
+/**
+ * Coluna L: mantém o texto que já estava e acrescenta, ao final, " | CV: <arquivo> | Recibo: <arquivo>" (A26).
+ * Se já havia um sufixo CV:/Recibo: de uma Tentativa anterior, ele é substituído, não repetido.
+ * @param {string} atual
+ * @param {{ cv?: string | null, recibo?: string | null }} caminhos caminhos relativos a output/ (nada de diretório do usuário)
+ */
+function montarObservacoes(atual, { cv, recibo }) {
+  const mantidos = String(atual ?? "").split(" | ").map((x) => x.trim()).filter((x) => x && !/^(CV|Recibo):/i.test(x));
+  return [...mantidos, ...(cv ? [`CV: ${cv}`] : []), ...(recibo ? [`Recibo: ${recibo}`] : [])].join(" | ");
+}
+
+/**
+ * Atualiza a linha da vaga depois de uma Tentativa: I (Candidatura enviada | Se candidatar), K (status) e L (observações + caminhos).
+ * @param {ClienteSheets} cliente
+ * @param {string} planilhaId
+ * @param {string} url
+ * @param {{ enviada: boolean, status: string, cv?: string | null, recibo?: string | null }} novo
+ * @returns {Promise<boolean>} false se a vaga não está na planilha
+ */
+async function atualizarCandidatura(cliente, planilhaId, url, { enviada, status, cv, recibo }) {
+  const alvo = (await lerLinhasDeVagas(cliente, planilhaId)).find((l) => normalizarUrl(l.url) === normalizarUrl(url));
+  if (!alvo) return false;
+  const { aba } = PLANILHA;
+  await cliente.escreverValores(planilhaId, intervalo(aba, `I${alvo.linha}`, `I${alvo.linha}`), [[enviada ? "Candidatura enviada" : "Se candidatar"]]);
+  await cliente.escreverValores(planilhaId, intervalo(aba, `K${alvo.linha}`, `L${alvo.linha}`), [[status, montarObservacoes(alvo.observacoes, { cv, recibo })]]);
+  return true;
+}
+
 module.exports = {
   normalizarUrl, criarClienteSheets, lerVagas, montarLinha, registrarVagas,
-  lerLinhasDeVagas, lerPendentesDeCurriculo, marcarCurriculoGerado, TEXTO_CV_GERADO
+  lerLinhasDeVagas, lerPendentesDeCurriculo, marcarCurriculoGerado, TEXTO_CV_GERADO,
+  lerVagasParaCandidatar, montarObservacoes, atualizarCandidatura
 };

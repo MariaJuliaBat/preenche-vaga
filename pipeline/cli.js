@@ -15,6 +15,7 @@ const { resultadoVazio, formatarResumo } = require("./resumo");
 const { criarEtapaRadar } = require("./radar/etapa");
 const { criarEtapaCurriculo } = require("./curriculo/etapa");
 const { loginAssistido } = require("./apply/sessao");
+const { criarEtapaCandidatura } = require("./apply/etapa");
 
 const AJUDA = `Uso: npm run pipeline -- [opções]
 
@@ -32,7 +33,7 @@ AUTO_SUBMIT=false é o padrão: o pipeline preenche mas não envia.`;
 // Cada etapa entra aqui quando for implementada; até lá, só avisa. Contrato: executar(contexto) → void,
 // somando em contexto.resultado.
 /** @type {Record<string, (contexto: any) => Promise<void>>} */
-const IMPLEMENTADAS = { radar: criarEtapaRadar(), curriculo: criarEtapaCurriculo() };
+const IMPLEMENTADAS = { radar: criarEtapaRadar(), curriculo: criarEtapaCurriculo(), candidatura: criarEtapaCandidatura() };
 
 /**
  * @param {string[]} argv
@@ -107,7 +108,7 @@ async function executar(argv, io = {}) {
         resultado.etapasNaoImplementadas.push(etapa);
         continue;
       }
-      await rodar({ config, resultado, logs });
+      await rodar({ config, resultado, logs, saida });
       resultado.etapasRodadas.push(etapa);
     }
 

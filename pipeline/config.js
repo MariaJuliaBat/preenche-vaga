@@ -21,7 +21,7 @@ const ETAPAS = Object.freeze(["radar", "curriculo", "candidatura"]);
 const EXIGIDAS = Object.freeze({
   radar: ["GOOGLE_SHEET_URL", "GOOGLE_SERVICE_ACCOUNT_FILE"],
   curriculo: ["GOOGLE_DOC_CV_BASE_URL", "GOOGLE_SERVICE_ACCOUNT_FILE"],
-  candidatura: ["GOOGLE_SHEET_URL", "GOOGLE_SERVICE_ACCOUNT_FILE"]
+  candidatura: ["GOOGLE_SHEET_URL", "GOOGLE_DOC_CV_BASE_URL", "GOOGLE_SERVICE_ACCOUNT_FILE"]
 });
 
 /**
@@ -105,6 +105,8 @@ function montarConfig(env, opcoes = {}) {
       : "",
     dadosComplementares: path.resolve(RAIZ, env.DADOS_COMPLEMENTARES_FILE || "secrets/dados-complementares.json"),
     planilha: PLANILHA,
+    // Auto-Apply: janela visível por padrão (a aba com Pendência fica aberta para você terminar). APPLY_HEADLESS=true esconde a janela.
+    apply: { headless: env.APPLY_HEADLESS === "true" },
     radar: {
       vigenciaDias: lerInteiroPositivo(env.RADAR_VIGENCIA_DIAS, "RADAR_VIGENCIA_DIAS", 20),
       maxVagasLote: lerInteiroPositivo(env.MAX_VAGAS_LOTE, "MAX_VAGAS_LOTE", 10),
