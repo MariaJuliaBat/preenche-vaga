@@ -1,6 +1,6 @@
 # Spec: Dashboard local do Pipeline
 
-> Status: implementado · complementa `pipeline-candidatura.md` (P6, Cota DF) e `perfil-e-curriculo.md` (PDFs)
+> Status: implementado · complementa `pipeline-candidatura.md` (P6, Cota DF), `perfil-e-curriculo.md` (PDFs) e `auto-apply.md` (candidatura e login, D15 a D17)
 > O Dashboard é uma **tela local** para operar o Pipeline. Ele não decide nada: chama a CLI e mostra o que o Pipeline já gravou em `output/`.
 
 ## 1. Objetivo
@@ -21,7 +21,7 @@
 | **Extensão** | Preencher formulário | — | — | `content/`, `popup/` (não muda) |
 
 Fronteiras:
-- O Dashboard **nunca** lê `.env`, `secrets/`, `output/perfil.json` nem a sessão do navegador, e **nunca** abre a Etapa `candidatura`: não envia candidatura.
+- O Dashboard **nunca** lê `.env`, `secrets/`, `output/perfil.json` nem a sessão do navegador, e **não tem regra de candidatura**: ele só pode iniciar a Etapa `candidatura` (e o login) pela CLI, sempre em simulação por padrão (D15, D16). Quem decide enviar é a CLI (`AUTO_SUBMIT`), nunca a tela.
 - A única escrita é indireta: iniciar `node pipeline/cli.js`, que já respeita `--dry-run` e `AUTO_SUBMIT`.
 - Texto de vaga (título, motivo, empresa) é **dado não confiável**: a tela o mostra como texto, nunca como HTML.
 
@@ -46,7 +46,7 @@ Termos a evitar: "usuário" (use **Candidata**), "job" (use **Execução**).
 | **D1** | Ubíquo | O Dashboard **deve** escutar só em `127.0.0.1` (porta `DASHBOARD_PORT`, padrão 4173). |
 | **D2** | Indesejado | **Se** a requisição vier com `Host` diferente de `127.0.0.1` ou `localhost`, **então** o Dashboard **deve** responder 403 (proteção contra DNS rebinding). |
 | **D3** | Indesejado | **Se** uma requisição que inicia Execução vier sem `Content-Type: application/json` ou com `Origin` de outro endereço, **então** o Dashboard **deve** responder 403 e não iniciar nada (proteção contra outra página abrindo a CLI). |
-| **D4** | Evento | **Quando** a Candidata pedir uma Execução, o Dashboard **deve** iniciar `pipeline/cli.js` com `--only-radar` ou `--only-cv`, e **deve** recusar qualquer outra Etapa, inclusive `candidatura`. |
+| **D4** | Evento | **Quando** a Candidata pedir uma Execução, o Dashboard **deve** iniciar `pipeline/cli.js` com `--only-radar`, `--only-cv` ou `--only-apply` (D15 e D16), e **deve** recusar qualquer outra Etapa. |
 | **D5** | Estado | **Enquanto** uma Execução estiver rodando, o Dashboard **deve** recusar nova Execução (409) e **deve** mostrar a saída da CLI conforme ela chega. |
 | **D6** | Ubíquo | A tela **deve** iniciar com Simulação ligada; **se** a Candidata a desligar, **então** a requisição **deve** trazer `confirmar: true`, senão o Dashboard **deve** recusar (400), porque sem `--dry-run` a planilha é escrita. |
 | **D7** | Evento | **Quando** a Candidata abrir a aba Currículos, o Dashboard **deve** listar os PDFs de `output/cvs/` (mais novo primeiro) e exibir o escolhido dentro da tela. |
@@ -56,7 +56,10 @@ Termos a evitar: "usuário" (use **Candidata**), "job" (use **Execução**).
 | **D11** | Ubíquo | O Dashboard **deve** listar Pendências, Pistas e Descartes dos arquivos `.jsonl` (mais recente primeiro), com contagem por motivo nos Descartes e filtro por texto. |
 | **D12** | Indesejado | **Se** um arquivo de log não existir ou tiver linha inválida, **então** o Dashboard **deve** tratá-lo como vazio ou ignorar a linha, sem erro. |
 | **D13** | Ubíquo | O Dashboard **deve** exibir títulos, motivos e saída da CLI como texto (nunca interpretar HTML) e **não deve** expor nome, contatos nem texto do currículo. |
-| **D14** | Opcional | **Onde** `pendencias.jsonl` ainda não existir (a Etapa `candidatura` é futura), o Dashboard **deve** mostrar a aba Pendências vazia, com a explicação. |
+| **D14** | Opcional | **Onde** `pendencias.jsonl` ainda não existir (nenhuma candidatura parou numa Pendência ainda), o Dashboard **deve** mostrar a aba Pendências vazia, com a explicação. |
+| **D15** | Evento | **Quando** a Candidata clicar em "Candidatar", o Dashboard **deve** iniciar `pipeline/cli.js --only-apply --dry-run` (simulação), sem pedir nada além do clique. |
+| **D16** | Indesejado | **Se** a Simulação estiver desligada, **então** a tela **deve** exibir um painel de confirmação explícito (dizendo se `AUTO_SUBMIT` está ligado e que a candidatura pode ser enviada de verdade) e **só** depois do "Sim" enviar `confirmar: true` e `confirmarEnvioReal: true`; **se** o servidor receber a candidatura sem simulação e sem os dois, **então** **deve** recusar (400) e não iniciar nada. A tela não mostra a quantidade de vagas: ela não lê a planilha. |
+| **D17** | Evento | **Quando** a Candidata clicar em "Login no Gupy", "Login no Trampos" ou "Janela em branco", o Dashboard **deve** iniciar `pipeline/cli.js --login <portal>` (ou `--login`), sem `--dry-run`, e **deve** recusar qualquer outro portal (400). O Dashboard **nunca** vê a senha nem a sessão do navegador. |
 
 ## 5. Cenários BDD
 
@@ -94,10 +97,24 @@ Funcionalidade: Dashboard local do Pipeline
     Quando a requisição não trouxer confirmar
     Então o Dashboard recusa e nada é iniciado
 
-  # Cobre D4
-  Cenário: Candidatura não existe na tela
-    Quando alguém pedir a Etapa "candidatura"
-    Então o Dashboard recusa
+  # Cobre D15
+  Cenário: Candidatar começa em simulação
+    Quando eu clicar em "Candidatar" sem mexer na Simulação
+    Então a CLI roda com --only-apply --dry-run
+
+  # Cobre D16
+  Cenário: Candidatura sem simulação exige confirmação explícita
+    Dado a Simulação desligada
+    Quando eu clicar em "Candidatar"
+    Então a tela mostra o painel de confirmação e nada roda ainda
+    E só depois do "Sim" a CLI roda com --only-apply
+    Mas uma requisição direta sem confirmarEnvioReal é recusada
+
+  # Cobre D17
+  Cenário: Login assistido
+    Quando eu clicar em "Login no Gupy"
+    Então a CLI roda com --login gupy e o navegador abre no meu computador
+    E um pedido de login no LinkedIn é recusado
 
   # Cobre D5
   Cenário: Uma Execução por vez
@@ -128,7 +145,8 @@ Funcionalidade: Dashboard local do Pipeline
 |---|---|---|---|
 | D1 | — | `dashboard/server.js` (`listen`) | `tests/dashboard/servidor.test.js` |
 | D2, D3 | Requisição de outra origem | `validarRequisicao` | idem |
-| D4, D5, D6 | Simulação, Candidatura, Uma por vez | `dashboard/executor.js`, `POST /api/execucoes` | idem |
+| D4, D5, D6 | Simulação, Uma por vez | `dashboard/executor.js`, `POST /api/execucoes` | idem |
+| D15, D16, D17 | Candidatar começa em simulação; confirmação explícita; Login assistido | `dashboard/executor.js`, `dashboard/server.js`, `public/app.js` (painel `#confirma-envio`) | idem |
 | D7, D8 | Ver PDF | `listarCurriculos`, `GET /cvs/` | idem |
 | D9, D10 | Cota DF | `dashboard/dados.js` (`calcularCota`) | idem |
 | D11, D12, D14 | Descartes | `lerLog` | idem |
@@ -136,9 +154,9 @@ Funcionalidade: Dashboard local do Pipeline
 
 ## 7. Fora do escopo
 
-- Enviar candidatura ou editar a planilha pela tela.
+- Decidir o envio ou editar a planilha pela tela: a regra fica na CLI (`AUTO_SUBMIT`, travas do Auto-Apply).
 - Autenticação: o acesso é só da máquina local (D1 a D3).
 - Mostrar ou editar o Perfil e o Currículo Base.
-- Gravar Pendências: depende da Etapa `candidatura` (futura); a tela só lê o arquivo quando ele existir.
+- Gravar Pendências: quem grava é a Etapa `candidatura` da CLI; a tela só lê o arquivo.
 
 > **O que você aprendeu:** (1) o Dashboard é uma camada fina: a regra continua na CLI; (2) servidor local também precisa de defesa (Host e Origin), pois qualquer página aberta no navegador pode tentar chamá-lo; (3) cada regra EARS aponta para um cenário e um teste.

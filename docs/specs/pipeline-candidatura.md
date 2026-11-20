@@ -1,6 +1,6 @@
 # Spec: Pipeline de Candidatura
 
-> Status: rascunho · Passo 1 (base) implementado; Perfil e módulos 1 a 5 ainda por implementar
+> Status: rascunho · Passo 1 (base), Radar, Perfil/Currículo, Dashboard e Auto-Apply (Passo 5, detalhado em `auto-apply.md`) implementados
 > Complementa `preenchimento-automatico.md`. Aquela spec rege a **extensão**; esta rege o **pipeline**.
 
 ## 1. Objetivo
@@ -175,9 +175,10 @@ Funcionalidade: Pipeline de Candidatura
 | P5 | Configuração incompleta falha cedo | `validar`; `tests/pipeline/cli.test.js` |
 | P6 | Resumo final | `pipeline/resumo.js`; `tests/pipeline/cli.test.js` |
 | P18 a P21 | Perfil extraído do Doc, sem inventar | a implementar em `pipeline/perfil/` |
-| P22, P23 | Dados Complementares ficam locais | `dados-complementares.example.json`, `.gitignore` (`secrets/`); schema a implementar |
-| P24, P25, P26 | radio, select e checkbox | a implementar em `content/mapeamento.js` e `pipeline/apply/` |
-| P27 | — | testes existentes em `tests/preencher.test.js` |
+| P22, P23 | Dados Complementares ficam locais | `dados-complementares.example.json`, `.gitignore` (`secrets/`), `pipeline/perfil/complementares.js` |
+| P24, P25, P26 | radio, select e checkbox | `content/mapeamento.js`, `pipeline/apply/campos.js`, `pipeline/apply/motor.js` (ver `auto-apply.md`: A8, A10, A15) |
+| P27 | — | `tests/preencher.test.js` (inalterado) e `tests/pipeline/apply/campos.test.js` |
+| P15, P16, P17 | CAPTCHA vira Pendência | `pipeline/apply/` (ver `auto-apply.md`: A1 a A6, A17, A24, A25) |
 | P7 a P17 | — | a implementar nos próximos passos |
 
 ## 7. Fora do escopo (por enquanto)

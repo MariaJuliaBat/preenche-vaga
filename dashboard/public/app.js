@@ -65,15 +65,18 @@ function mostrarExecucao(exec) {
   saida.textContent = exec.linhas.join("\n");
   if (noFim) saida.scrollTop = saida.scrollHeight;
   const status = $("status-execucao");
-  if (exec.rodando) { status.className = "status"; status.textContent = `Rodando ${exec.etapa}${exec.dryRun ? " (simulação)" : ""}…`; }
+  if (exec.rodando) { status.className = "status"; status.textContent = exec.etapa === "login" ? "Janela de login aberta no seu computador: entre na conta e feche a janela." : `Rodando ${exec.etapa}${exec.dryRun ? " (simulação)" : ""}…${exec.etapa === "candidatura" && !exec.dryRun ? " (abas com Pendência ficam abertas: termine à mão e feche a janela)" : ""}`; }
   else if (exec.fim) { status.className = `status ${exec.codigo === 0 ? "ok" : "erro"}`; status.textContent = exec.codigo === 0 ? `Concluído (${exec.etapa}).` : `Terminou com erro (código ${exec.codigo}).`; }
-  $("rodar-radar").disabled = $("rodar-cv").disabled = exec.rodando;
+  for (const id of BOTOES_DE_EXECUCAO) $(id).disabled = exec.rodando;
 }
 
+let autoSubmitLigado = false;
+const BOTOES_DE_EXECUCAO = ["rodar-radar", "rodar-cv", "rodar-candidatura", "login-gupy", "login-trampos", "login-branco"];
 let esperaAnterior = false;
 async function atualizarEstado() {
   try {
     const estado = await api("/api/estado");
+    autoSubmitLigado = estado.modo.autoSubmit;
     $("modo").textContent = estado.modo.autoSubmit ? "AUTO_SUBMIT ligado" : "AUTO_SUBMIT desligado";
     const total = Object.values(estado.contagens).reduce((a, b) => a + b, 0);
     $("contagem-auditoria").textContent = total > 0 ? String(total) : "";
@@ -90,14 +93,33 @@ async function atualizarEstado() {
   }
 }
 
-async function executar(etapa) {
+async function executar(etapa, extra = {}) {
   const simulacao = $("simulacao").checked;
-  if (!simulacao && !window.confirm("Sem simulação, o Pipeline escreve na planilha. Continuar?")) return;
+  if (!simulacao && etapa !== "candidatura" && !window.confirm("Sem simulação, o Pipeline escreve na planilha. Continuar?")) return;
+  await enviarExecucao({ etapa, dryRun: simulacao, ...(simulacao ? {} : { confirmar: true }), ...extra });
+}
+
+// A candidatura sem simulação passa por um painel de confirmação explícito (D16) e só então leva confirmarEnvioReal.
+function pedirCandidatura() {
+  if ($("simulacao").checked) return executar("candidatura");
+  $("confirma-texto").textContent = autoSubmitLigado
+    ? "AUTO_SUBMIT está ligado: o Pipeline vai ENVIAR as vagas marcadas \"Se candidatar\" na planilha que não tiverem nenhuma trava (aceite de termos, pergunta aberta, CAPTCHA...). As demais viram Pendência."
+    : "AUTO_SUBMIT está desligado: nada será enviado. Os formulários serão preenchidos e as vagas viram Pendência, com a planilha atualizada.";
+  $("confirma-envio").hidden = false;
+  $("confirma-nao").focus();
+}
+$("confirma-nao").addEventListener("click", () => { $("confirma-envio").hidden = true; });
+$("confirma-sim").addEventListener("click", () => {
+  $("confirma-envio").hidden = true;
+  executar("candidatura", { confirmarEnvioReal: true });
+});
+
+async function enviarExecucao(corpo) {
   try {
     const exec = await api("/api/execucoes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ etapa, dryRun: simulacao, ...(simulacao ? {} : { confirmar: true }) })
+      body: JSON.stringify(corpo)
     });
     mostrarExecucao(exec);
   } catch (erro) {
@@ -107,6 +129,10 @@ async function executar(etapa) {
 }
 $("rodar-radar").addEventListener("click", () => executar("radar"));
 $("rodar-cv").addEventListener("click", () => executar("curriculo"));
+$("rodar-candidatura").addEventListener("click", pedirCandidatura);
+$("login-gupy").addEventListener("click", () => enviarExecucao({ etapa: "login", portal: "gupy" }));
+$("login-trampos").addEventListener("click", () => enviarExecucao({ etapa: "login", portal: "trampos" }));
+$("login-branco").addEventListener("click", () => enviarExecucao({ etapa: "login" }));
 
 // ---- Currículos ----
 let pdfAtual = null;

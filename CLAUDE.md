@@ -8,7 +8,7 @@ envia a candidatura: a pessoa sempre revisa e clica em enviar.
 
 O repositório tem um segundo produto, o **pipeline/** (CLI em Node.js): busca vagas,
 gera currículo sob medida, preenche e registra na planilha. Só ele pode enviar
-candidaturas, e só com `AUTO_SUBMIT=true` fora do `--dry-run`. Spec: docs/specs/pipeline-candidatura.md.
+candidaturas, e só com `AUTO_SUBMIT=true` fora do `--dry-run`. Specs: docs/specs/pipeline-candidatura.md e docs/specs/auto-apply.md.
 
 ## Stack
 - Chrome Extension Manifest V3
@@ -19,8 +19,8 @@ candidaturas, e só com `AUTO_SUBMIT=true` fora do `--dry-run`. Spec: docs/specs
 - manifest.json
 - popup/ — tela onde a pessoa cadastra o currículo (digitando ou importando um .docx em popup/importar-docx.js)
 - content/ — script que encontra e preenche os campos da página
-- pipeline/ — CLI Node.js (config, logs, resumo, sheets, radar/, perfil/, curriculo/; candidatura no próximo passo). Reaproveita content/mapeamento.js
-- dashboard/ — tela local (127.0.0.1) que opera o pipeline, mostra os PDFs, a Cota DF e a auditoria. Só lê output/ e chama a CLI (radar e cv); nunca candidatura. Spec: docs/specs/dashboard.md
+- pipeline/ — CLI Node.js (config, logs, resumo, sheets, radar/, perfil/, curriculo/, apply/ = candidatura e sessão do navegador). Reaproveita content/mapeamento.js
+- dashboard/ — tela local (127.0.0.1) que opera o pipeline, mostra os PDFs, a Cota DF e a auditoria. Só lê output/ e chama a CLI (radar, cv, candidatura e login); candidatura começa sempre em `--dry-run` e exige confirmação explícita para desligá-lo; a regra de envio fica na CLI (`AUTO_SUBMIT`), nunca na tela. Spec: docs/specs/dashboard.md
 - paginas-teste/ — formulários falsos para testar sem usar sites reais
 
 ## Convenções
@@ -37,6 +37,7 @@ candidaturas, e só com `AUTO_SUBMIT=true` fora do `--dry-run`. Spec: docs/specs
 
 ## Comandos
 - `npm run pipeline -- --help` — CLI do pipeline (`--only-radar`, `--only-cv`, `--only-apply`, `--dry-run`)
+- `npm run pipeline -- --login gupy|trampos` — abre o navegador para você entrar à mão (a sessão fica em output/sessao-navegador/)
 - `npm run dashboard` — Dashboard em http://127.0.0.1:4173
 - `npm test`, `npm run lint`, `npm run typecheck`
 - `npx serve paginas-teste` — sobe as páginas de teste em http://localhost:3000

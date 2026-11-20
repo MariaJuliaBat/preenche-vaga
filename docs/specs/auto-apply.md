@@ -62,7 +62,7 @@ Fronteiras:
 | **A10** | Orientado a evento | **Quando** o Campo for `select`, `radio` ou `checkbox` que **não** seja Aceite, o Pipeline **deve** aplicar P25: escolher a única opção cujo texto ou valor Normalizado case com o dado (ou com Sinônimo de valor); sem opção única, deixar como está e, se obrigatório, registrar Pendência. |
 | **A11** | Orientado a evento | **Quando** houver `input[type="file"]` com rótulo de currículo/CV/anexo, o Pipeline **deve** anexar o PDF de `output/cvs/` **daquela vaga** (nunca o de outra) e conferir que o campo aceitou o arquivo (nome em `input.files` ou na página); se não, Pendência "upload não confirmado". |
 | **A12** | Ubíquo | Ampliar `content/mapeamento.js` **não deve** mudar a extensão: a extensão só Preenche as chaves que o popup cadastra e segue tratando `radio`, `checkbox` e `file` como Campo Ignorado. Os testes atuais de `content/` e `popup/` **devem** continuar passando sem edição. |
-| **A13** | Ubíquo | Dados vindos de `secrets/dados-complementares.json` **devem** ser validados por schema Zod; o repositório **deve** trazer só `secrets/dados-complementares.example.json` (e `.gitignore` liberando só esse arquivo), com valores fictícios óbvios (ex.: CPF `000.000.000-00`). |
+| **A13** | Ubíquo | Dados vindos de `secrets/dados-complementares.json` **devem** ser validados por schema Zod; o repositório **deve** trazer só `dados-complementares.example.json` (na raiz), com valores fictícios óbvios (ex.: CPF `000.000.000-00`); o arquivo real fica em `secrets/dados-complementares.json`, ignorado pelo Git. Os nomes dos campos são os do exemplo (`disponibilidadeInicio`, `horarioDisponivel`, `modalidadePreferida`...). |
 | **A14** | Ubíquo | O Pipeline **deve** preencher **todos** os Campos que conseguir antes de parar numa Pendência, para a Candidata só terminar o que falta. |
 
 ### 4.3 Travas de segurança
@@ -94,7 +94,7 @@ Fronteiras:
 
 | # | Padrão EARS | Requisito |
 |---|---|---|
-| **A30** | Orientado a evento | **Quando** a Candidata clicar em "Candidatar" no Dashboard, ele **deve** só iniciar `node pipeline/cli.js --only-apply`, **sempre com `--dry-run` por padrão**. Para rodar com `--dry-run` desligado, o Dashboard **deve** exibir confirmação explícita ("Isto pode enviar candidaturas reais para N vagas") e **só** iniciar após o "Sim"; se `AUTO_SUBMIT` não for `true`, **deve** avisar que nada será enviado. O botão "Fazer login" **deve** iniciar `--login <portal>` com o navegador visível. |
+| **A30** | Orientado a evento | **Quando** a Candidata clicar em "Candidatar" no Dashboard, ele **deve** só iniciar `node pipeline/cli.js --only-apply`, **sempre com `--dry-run` por padrão**. Para rodar com `--dry-run` desligado, o Dashboard **deve** exibir confirmação explícita ("Sem simulação, isto pode enviar candidaturas reais", sem o número de vagas: ele não lê a planilha) e **só** iniciar após o "Sim", enviando `confirmar` e `confirmarEnvioReal`; se `AUTO_SUBMIT` não for `true`, **deve** avisar que nada será enviado. O botão "Fazer login" **deve** iniciar `--login <portal>` com o navegador visível. |
 
 ## 5. Cenários BDD
 
@@ -218,16 +218,15 @@ Funcionalidade: Auto-Apply
 
 | Critério | Cenário | Código previsto |
 |---|---|---|
-| A1 a A6 | Login Assistido; Login expirado | `pipeline/apply/sessao.js`, flag `--login` em `pipeline/cli.js` |
-| A7, A8, A12, A13 | Preenche...; Sinônimo específico; A extensão continua igual | `content/mapeamento.js`, `pipeline/perfil/complementares.js`, `secrets/dados-complementares.example.json`, `tests/preencher.test.js` (inalterado) |
-| A9, A10, A14 | Preenche texto, select e radio | `pipeline/apply/preencher.js` |
-| A11 | Upload do PDF da própria vaga | `pipeline/apply/anexo.js` |
-| A15 a A21, A23 | Aceite; Pergunta aberta; CAPTCHA; Texto é dado; Não vazam | `pipeline/apply/travas.js` |
-| A22, A27, A28 | Dry-run vence; Envio real | `pipeline/apply/etapa.js` |
-| A24 a A26, A29 | Envio real atualiza a Planilha | `pipeline/apply/recibo.js`, `pipeline/sheets.js` (atualizar linha) |
-| A30 | Dashboard exige confirmação | `dashboard/server.js`, `dashboard/public/`, `docs/specs/dashboard.md` (a emendar) |
+| A1 a A6 | Login Assistido; Login expirado | `pipeline/apply/sessao.js`, flag `--login` em `pipeline/cli.js`; `tests/pipeline/apply/sessao.test.js`, `tests/pipeline/cli.test.js` |
+| A7, A8, A12, A13 | Preenche...; Sinônimo específico; A extensão continua igual | `content/mapeamento.js`, `pipeline/apply/campos.js`, `pipeline/perfil/complementares.js`, `dados-complementares.example.json`; `tests/pipeline/apply/campos.test.js` (inclui a extensão) |
+| A9, A10, A11, A14 | Preenche texto, select e radio; Upload do PDF da própria vaga | `pipeline/apply/motor.js` (`planejar`, `aplicar`), `pipeline/curriculo/manifesto.js`; `tests/pipeline/apply/motor.test.js` |
+| A15 a A21, A23 | Aceite; Pergunta aberta; CAPTCHA; Texto é dado; Não vazam | `pipeline/apply/travas.js`, `pipeline/apply/motor.js`; `motor.test.js`, `etapa.test.js` |
+| A22, A27, A28 | Dry-run vence; Envio real | `pipeline/apply/motor.js`, `pipeline/apply/etapa.js`; idem |
+| A24 a A26, A29 | Envio real atualiza a Planilha | `pipeline/apply/etapa.js`, `pipeline/sheets.js` (`atualizarCandidatura`, `montarObservacoes`); `etapa.test.js` |
+| A30 | Dashboard exige confirmação | `dashboard/server.js`, `dashboard/executor.js`, `dashboard/public/`; `docs/specs/dashboard.md` (D15 a D17); `tests/dashboard/servidor.test.js` |
 
-Testes: formulários **fictícios** em `paginas-teste/` e `tests/pipeline/apply/` com Playwright contra HTML local. Nenhum teste toca Portal real, sessão real ou dado real.
+Testes: HTML **fictício** servido localmente a um Chrome/Edge real (Playwright), planilha e navegador falsos nos testes da Etapa. Nenhum teste toca Portal real, sessão real ou dado real. Os testes de página são pulados se não houver Chrome ou Edge.
 
 ## 7. Fora do escopo
 

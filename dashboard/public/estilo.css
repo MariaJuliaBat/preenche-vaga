@@ -57,3 +57,10 @@ input[type="search"] { width: 100%; padding: 8px 10px; border: 1px solid var(--b
 .tabela th, .tabela td { text-align: left; padding: 7px 8px; border-top: 1px solid var(--borda); vertical-align: top; }
 .tabela td a { color: var(--acento); overflow-wrap: anywhere; }
 @media (max-width: 720px) { .duas-colunas { grid-template-columns: 1fr; } .visualizador { min-height: 60vh; } }
+.aviso { margin: 12px 0; padding: 12px 14px; border: 1px solid var(--alerta); border-left-width: 4px; border-radius: 8px; background: var(--cartao); }
+.aviso[hidden] { display: none; }
+.aviso p { margin: 0 0 8px; }
+button.perigo { background: var(--erro); color: var(--acento-texto); border: 0; border-radius: 8px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+.botoes button:not(.primario):not(.perigo) { background: var(--cartao); color: var(--texto); border: 1px solid var(--borda); border-radius: 8px; padding: 9px 16px; font: inherit; cursor: pointer; }
+.botoes button:disabled { opacity: .55; cursor: not-allowed; }
+.cartao + .cartao { margin-top: 16px; }

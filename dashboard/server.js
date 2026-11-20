@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Dashboard local do Pipeline (docs/specs/dashboard.md): escuta só em 127.0.0.1, lê output/ e inicia a CLI.
-// Sem dependências nem etapa de build. Nunca envia candidatura.
+// Sem dependências nem etapa de build. Não tem regra de candidatura: só dispara a CLI (sempre em simulação, salvo dupla confirmação).
 //   npm run dashboard        → http://127.0.0.1:4173
 const http = require("node:http");
 const fs = require("node:fs");
@@ -109,9 +109,16 @@ function criarServidor({ config, executor = criarExecutor() }) {
 
       if (req.method === "POST" && rota === "/api/execucoes") {
         const corpo = await lerCorpo(req);
+        const etapa = String(corpo.etapa || "");
+        if (etapa === "login") { // D17: abre o navegador para a Candidata entrar à mão; não tem simulação nem escreve nada
+          const feito = executor.iniciar({ etapa, dryRun: false, portal: corpo.portal ? String(corpo.portal) : null });
+          return feito.ok ? json(res, 202, executor.estado()) : json(res, feito.status, { erro: feito.erro });
+        }
         const dryRun = corpo.dryRun !== false; // D6: simulação é o padrão
         if (!dryRun && corpo.confirmar !== true) return json(res, 400, { erro: "Sem simulação a planilha é escrita: envie confirmar: true." });
-        const resultado = executor.iniciar({ etapa: String(corpo.etapa || ""), dryRun });
+        // D16: candidatura sem simulação pode ENVIAR de verdade (se AUTO_SUBMIT=true): exige uma segunda confirmação, só dela.
+        if (etapa === "candidatura" && !dryRun && corpo.confirmarEnvioReal !== true) return json(res, 400, { erro: "Sem simulação a candidatura pode enviar de verdade: envie confirmarEnvioReal: true." });
+        const resultado = executor.iniciar({ etapa, dryRun });
         return resultado.ok ? json(res, 202, executor.estado()) : json(res, resultado.status, { erro: resultado.erro });
       }
 

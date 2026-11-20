@@ -98,12 +98,12 @@ test("D3: POST de outra origem ou sem JSON é recusado e nada é iniciado", asyn
   await s.fechar();
 });
 
-test("D4 e D6: simulação por padrão; sem simulação exige confirmar; candidatura é recusada", async () => {
+test("D4 e D6: simulação por padrão; sem simulação exige confirmar; etapa desconhecida é recusada", async () => {
   const falso = spawnFalso();
   const s = await subir(ambiente(), criarExecutor({ spawnImpl: falso.impl }));
 
-  assert.strictEqual((await postar(s.base, { etapa: "candidatura" })).status, 400);
   assert.strictEqual((await postar(s.base, { etapa: "apply" })).status, 400);
+  assert.strictEqual((await postar(s.base, { etapa: "enviar-tudo" })).status, 400);
   assert.strictEqual((await postar(s.base, { etapa: "curriculo", dryRun: false })).status, 400);
   assert.strictEqual(falso.chamadas.length, 0);
 
@@ -113,6 +113,41 @@ test("D4 e D6: simulação por padrão; sem simulação exige confirmar; candida
 
   assert.strictEqual((await postar(s.base, { etapa: "radar", dryRun: false, confirmar: true })).status, 202);
   assert.deepStrictEqual(falso.chamadas[1].args.slice(1), ["--only-radar"]);
+  await s.fechar();
+});
+
+test("D15 e D16: candidatura começa em simulação; sem simulação exige confirmar E confirmarEnvioReal", async () => {
+  const falso = spawnFalso();
+  const s = await subir(ambiente(), criarExecutor({ spawnImpl: falso.impl }));
+
+  assert.strictEqual((await postar(s.base, { etapa: "candidatura" })).status, 202); // sem corpo extra: simulação
+  assert.deepStrictEqual(falso.chamadas[0].args.slice(1), ["--only-apply", "--dry-run"]);
+  falso.chamadas[0].filho.emit("close", 0);
+
+  // desligar a simulação, só com a confirmação da planilha, não basta: pode ENVIAR de verdade
+  assert.strictEqual((await postar(s.base, { etapa: "candidatura", dryRun: false })).status, 400);
+  assert.strictEqual((await postar(s.base, { etapa: "candidatura", dryRun: false, confirmar: true })).status, 400);
+  assert.strictEqual((await postar(s.base, { etapa: "candidatura", dryRun: false, confirmarEnvioReal: true })).status, 400); // falta confirmar
+  assert.strictEqual(falso.chamadas.length, 1);
+
+  assert.strictEqual((await postar(s.base, { etapa: "candidatura", dryRun: false, confirmar: true, confirmarEnvioReal: true })).status, 202);
+  assert.deepStrictEqual(falso.chamadas[1].args.slice(1), ["--only-apply"]); // o AUTO_SUBMIT continua mandando na CLI
+  await s.fechar();
+});
+
+test("D17: login abre o navegador por portal (gupy, trampos ou em branco); LinkedIn e outros são recusados; sem --dry-run", async () => {
+  const falso = spawnFalso();
+  const s = await subir(ambiente(), criarExecutor({ spawnImpl: falso.impl }));
+
+  for (const portal of ["linkedin", "programathor", "../x"]) assert.strictEqual((await postar(s.base, { etapa: "login", portal })).status, 400, portal);
+  assert.strictEqual(falso.chamadas.length, 0);
+
+  assert.strictEqual((await postar(s.base, { etapa: "login", portal: "gupy" })).status, 202);
+  assert.deepStrictEqual(falso.chamadas[0].args.slice(1), ["--login", "gupy"]);
+  falso.chamadas[0].filho.emit("close", 0);
+
+  assert.strictEqual((await postar(s.base, { etapa: "login" })).status, 202);
+  assert.deepStrictEqual(falso.chamadas[1].args.slice(1), ["--login"]);
   await s.fechar();
 });
 

@@ -1,9 +1,11 @@
 // Executor do Dashboard (D4 a D6): inicia a CLI do Pipeline, uma Execução por vez, e guarda a saída para a tela.
-// Só aceita as Etapas radar e curriculo: a candidatura nunca é aberta por aqui.
+// Só dispara a CLI. Etapas aceitas: radar, curriculo, candidatura (sempre com --dry-run, salvo confirmação explícita no servidor)
+// e login (abre o navegador para a Candidata entrar à mão). Nenhuma regra de candidatura vive aqui.
 const { spawn } = require("node:child_process");
 const path = require("node:path");
 
-const ETAPAS_PERMITIDAS = Object.freeze({ radar: "--only-radar", curriculo: "--only-cv" });
+const ETAPAS_PERMITIDAS = Object.freeze({ radar: "--only-radar", curriculo: "--only-cv", candidatura: "--only-apply" });
+const PORTAIS_DE_LOGIN = Object.freeze(["gupy", "trampos"]);
 const MAX_LINHAS = 500;
 
 /**
@@ -22,15 +24,19 @@ function criarExecutor(opcoes = {}) {
   };
 
   /**
-   * @param {{ etapa: string, dryRun: boolean }} pedido
+   * @param {{ etapa: string, dryRun: boolean, portal?: string | null }} pedido `portal` só vale para a etapa "login"
    * @returns {{ ok: true } | { ok: false, status: number, erro: string }}
    */
-  function iniciar({ etapa, dryRun }) {
-    if (!Object.hasOwn(ETAPAS_PERMITIDAS, etapa)) return { ok: false, status: 400, erro: "Etapa não permitida no Dashboard. Use radar ou curriculo." };
+  function iniciar({ etapa, dryRun, portal = null }) {
+    const ehLogin = etapa === "login";
+    if (!ehLogin && !Object.hasOwn(ETAPAS_PERMITIDAS, etapa)) return { ok: false, status: 400, erro: "Etapa não permitida no Dashboard. Use radar, curriculo, candidatura ou login." };
+    if (ehLogin && portal !== null && !PORTAIS_DE_LOGIN.includes(portal)) return { ok: false, status: 400, erro: `Portal desconhecido. Use ${PORTAIS_DE_LOGIN.join(" ou ")}, ou nenhum para uma janela em branco.` };
     if (estado.rodando) return { ok: false, status: 409, erro: "Já existe uma Execução em andamento." };
 
-    const argumentos = [path.join(raiz, "pipeline", "cli.js"), ETAPAS_PERMITIDAS[/** @type {keyof typeof ETAPAS_PERMITIDAS} */ (etapa)], ...(dryRun ? ["--dry-run"] : [])];
-    estado = { rodando: true, etapa, dryRun, inicio: new Date().toISOString(), fim: null, codigo: null, linhas: [`$ npm run pipeline -- ${argumentos.slice(1).join(" ")}`] };
+    // --login não combina com --dry-run (a CLI recusa); as demais etapas levam --dry-run quando pedido.
+    const flags = ehLogin ? ["--login", ...(portal ? [portal] : [])] : [ETAPAS_PERMITIDAS[/** @type {keyof typeof ETAPAS_PERMITIDAS} */ (etapa)], ...(dryRun ? ["--dry-run"] : [])];
+    const argumentos = [path.join(raiz, "pipeline", "cli.js"), ...flags];
+    estado = { rodando: true, etapa, dryRun: ehLogin ? false : dryRun, inicio: new Date().toISOString(), fim: null, codigo: null, linhas: [`$ npm run pipeline -- ${argumentos.slice(1).join(" ")}`] };
     const filho = iniciarProcesso(process.execPath, argumentos, { cwd: raiz, windowsHide: true });
     filho.stdout?.on("data", (/** @type {Buffer} */ d) => acrescentar(d.toString("utf8")));
     filho.stderr?.on("data", (/** @type {Buffer} */ d) => acrescentar(d.toString("utf8")));
@@ -47,4 +53,4 @@ function criarExecutor(opcoes = {}) {
   return { iniciar, estado: () => ({ ...estado, linhas: [...estado.linhas] }) };
 }
 
-module.exports = { criarExecutor, ETAPAS_PERMITIDAS };
+module.exports = { criarExecutor, ETAPAS_PERMITIDAS, PORTAIS_DE_LOGIN };
