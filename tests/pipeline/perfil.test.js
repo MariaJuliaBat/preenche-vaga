@@ -75,7 +75,7 @@ test("cabeçalho de item: cargo, organização e período em vários formatos", 
 
 test("formação: grau, curso, instituição, status e previsão em uma linha ou em várias", () => {
   assert.deepStrictEqual(parsearLinhaDeFormacao("Bacharelado em Ciência da Computação - Faculdade Exemplo - concluído"), {
-    instituicao: "Faculdade Exemplo", curso: "Ciência da Computação", grau: "Bacharelado", status: "concluído", previsaoConclusao: null
+    instituicao: "Faculdade Exemplo", curso: "Ciência da Computação", grau: "Bacharelado", sigla: null, status: "concluído", previsaoConclusao: null
   });
   assert.strictEqual(parsearLinhaDeFormacao("Licenciatura em Computação (UnB), 2025 - 2029, cursando").instituicao, "UnB");
   assert.strictEqual(parsearLinhaDeFormacao("Licenciatura em Computação (UnB), 2025 - 2029, cursando").previsaoConclusao, "2029");
@@ -95,15 +95,15 @@ test("PF2 e PF4: formato B (acentos, dois-pontos, cabeçalho em duas linhas, mar
     regiaoAdministrativa: null, linkedin: "https://www.linkedin.com/in/maria-exemplo", github: "https://github.com/mariaexemplo",
     portfolio: "https://maria.exemplo.dev"
   });
-  assert.deepStrictEqual(perfil.formacao, [{ instituicao: "Universidade Exemplo", curso: "Computação", grau: "Licenciatura", status: null, previsaoConclusao: "dez/2029" }]);
+  assert.deepStrictEqual(perfil.formacao, [{ instituicao: "Universidade Exemplo", curso: "Computação", grau: "Licenciatura", sigla: null, status: null, previsaoConclusao: "dez/2029" }]);
   assert.strictEqual(perfil.experiencias.length, 2);
   assert.deepStrictEqual(perfil.experiencias[0], {
     tipo: "experiencia", titulo: "Desenvolvedora Júnior", organizacao: "Acme Exemplo", periodo: "Jan 2024 – Dez 2024",
-    descricao: ["Construí APIs com Node.js e Express.", "Escrevi testes com Jest."], tecnologias: ["Node.js", "Express", "Jest"]
+    descricao: ["Construí APIs com Node.js e Express.", "Escrevi testes com Jest."], tecnologias: ["Node.js", "Express", "Jest"], links: []
   });
   assert.deepStrictEqual(perfil.experiencias[1], {
     tipo: "projeto", titulo: "Painel de Vagas", organizacao: null, periodo: "2025",
-    descricao: ["Interface em React com dados em MySQL."], tecnologias: [] // React e MySQL não estão na lista de habilidades do Doc
+    descricao: ["Interface em React com dados em MySQL."], tecnologias: [], links: [] // React e MySQL não estão na lista de habilidades do Doc
   });
   assert.deepStrictEqual(perfil.habilidades, {
     tecnicas: ["JavaScript", "TypeScript", "Python"], ferramentas: ["Git", "Docker"], idiomas: ["Inglês - intermediário", "Espanhol - básico"]
@@ -217,7 +217,7 @@ test("formação: cada linha datada é uma formação; tópicos com marcador nã
   const { perfil } = parsearPerfil(TEXTO_C);
   assert.strictEqual(perfil.formacao.length, 3);
   assert.deepStrictEqual(perfil.formacao[0], {
-    instituicao: "Universidade Exemplo", curso: "Computação", grau: "Licenciatura", status: "Atual", previsaoConclusao: null
+    instituicao: "Universidade Exemplo", curso: "Computação", grau: "Licenciatura", sigla: "UEx", status: "Atual", previsaoConclusao: null
   });
   assert.strictEqual(perfil.formacao[1].grau, "Técnico");
   assert.strictEqual(perfil.formacao[1].instituicao, "Escola Exemplo");

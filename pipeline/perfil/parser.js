@@ -74,6 +74,28 @@ function rotuloELista(linha) {
   return { rotulo, itens: dividirLista(valor) };
 }
 
+const ROTULOS_DE_LINK = /^(reposit[óo]rio|mat[ée]ria|not[ií]cia|reportagem|imprensa|demo|demonstra[cç][aã]o|site|link|deploy|publica[cç][aã]o|artigo|v[ií]deo|portf[óo]lio|c[óo]digo)\s*:\s*(.+)$/i;
+// Domínio + caminho. Aceita espaço dentro do caminho (o Doc às vezes quebra o link); ele é removido ao montar a URL.
+const DOMINIO_E_CAMINHO = /^(?:https?:\/\/)?[\w-]+(?:\.[\w-]+)+(?:\/.*)?$/;
+
+/**
+ * "Repositório: github.com/Usuario/Repo" ou "Matéria: veiculo.com/titulo (https://www.veiculo.com/titulo)" é um LINK do item,
+ * não uma frase de descrição. Devolve o rótulo como está no Doc e a URL completa, sem espaços.
+ * @param {string} linha
+ * @returns {{ rotulo: string, url: string } | null}
+ */
+function lerLinkRotulado(linha) {
+  const m = ROTULOS_DE_LINK.exec(semMarcador(linha).trim());
+  if (!m) return null;
+  const resto = m[2].trim();
+  const entreParenteses = /\((https?:\/\/[^\s)]+)\)\s*$/.exec(resto);
+  const solto = DOMINIO_E_CAMINHO.test(resto) ? resto : null;
+  const bruta = entreParenteses ? entreParenteses[1] : solto;
+  if (!bruta) return null;
+  const url = bruta.replace(/\s+/g, "").replace(/[.,;]+$/, ""); // URL exata: nunca com espaço no meio
+  return { rotulo: m[1].charAt(0).toUpperCase() + m[1].slice(1), url: /^https?:\/\//i.test(url) ? url : `https://${url}` };
+}
+
 /** @param {string} linha @returns {{ periodo: string | null, resto: string, fim: string | null }} */
 function tirarPeriodo(linha) {
   const faixa = PERIODO_FAIXA.exec(linha);
@@ -93,7 +115,7 @@ function cabecalhoDoItem(linha) {
 
 /** @param {string[]} linhas @param {"experiencia" | "projeto"} tipo */
 function parsearItens(linhas, tipo) {
-  /** @type {{ tipo: "experiencia" | "projeto", titulo: string | null, organizacao: string | null, periodo: string | null, descricao: string[], tecnologias: string[] }[]} */
+  /** @type {{ tipo: "experiencia" | "projeto", titulo: string | null, organizacao: string | null, periodo: string | null, descricao: string[], tecnologias: string[], links: { rotulo: string, url: string }[] }[]} */
   const itens = [];
   /** @type {typeof itens[number] | null} */
   let atual = null;
@@ -106,7 +128,9 @@ function parsearItens(linhas, tipo) {
     if (tecnologias && atual) {
       atual.tecnologias.push(...dividirLista(tecnologias[1]));
     } else if (BULLET.test(linha) && atual) {
-      atual.descricao.push(semMarcador(linha));
+      const link = lerLinkRotulado(linha);
+      if (link) atual.links.push(link);
+      else atual.descricao.push(semMarcador(linha));
     } else if (atual && (linha.length > 110 || /[.!?]$/.test(linha))) {
       atual.descricao.push(linha); // parágrafo solto sob o cabeçalho
     } else if (atual && atual.descricao.length === 0 && (!atual.organizacao || !atual.periodo)) {
@@ -117,7 +141,7 @@ function parsearItens(linhas, tipo) {
       if (extra && !atual.organizacao) atual.organizacao = extra;
     } else {
       const c = cabecalhoDoItem(linha);
-      atual = { tipo, titulo: c.titulo, organizacao: c.organizacao, periodo: c.periodo, descricao: [], tecnologias: [] };
+      atual = { tipo, titulo: c.titulo, organizacao: c.organizacao, periodo: c.periodo, descricao: [], tecnologias: [], links: [] };
       itens.push(atual);
     }
   }
@@ -132,8 +156,8 @@ const GRAU_ESPECIFICO = /\b(licenciatura|bacharelado|bacharel|tecn[oó]logo|tecn
  */
 function lerLinhaDeFormacao(linha) {
   let texto = semMarcador(linha);
-  /** @type {{ instituicao: string | null, curso: string | null, grau: string | null, status: string | null, previsaoConclusao: string | null }} */
-  const f = { instituicao: null, curso: null, grau: null, status: null, previsaoConclusao: null };
+  /** @type {{ instituicao: string | null, curso: string | null, grau: string | null, sigla: string | null, status: string | null, previsaoConclusao: string | null }} */
+  const f = { instituicao: null, curso: null, grau: null, sigla: null, status: null, previsaoConclusao: null };
 
   const prev = PREVISAO.exec(texto);
   if (prev) {
@@ -182,6 +206,7 @@ function lerLinhaDeFormacao(linha) {
   if (grauEspecifico) f.grau = grauEspecifico;
   // "Curso – Instituição | período": o segmento que sobrou depois do curso é a instituição, mesmo sem a palavra "Universidade".
   if (!f.instituicao) f.instituicao = sobras[0] || sigla;
+  if (sigla && sigla !== f.instituicao) f.sigla = sigla;
   return { f, periodo: Boolean(periodo) };
 }
 
@@ -221,8 +246,11 @@ function parsearHabilidades(linhasHabilidades, linhasIdiomas) {
     const linha = semMarcador(bruta);
     if (!linha) continue;
     const { rotulo, itens } = rotuloELista(linha);
-    if (/^idiomas?\b|^linguas?$/.test(rotulo)) juntar(idiomas, itens); // "Linguagens" (de programação) não é idioma
-    else if (/ferrament/.test(rotulo)) juntar(ferramentas, itens);
+    if (/^idiomas?\b|^linguas?$/.test(rotulo)) {
+      juntar(idiomas, itens); // "Linguagens" (de programação) não é idioma
+      continue;
+    }
+    if (/ferrament/.test(rotulo)) juntar(ferramentas, itens);
     else juntar(tecnicas, itens);
   }
   for (const bruta of linhasIdiomas) {
@@ -249,7 +277,8 @@ function parsearIdentificacao(linhasDoCabecalho, texto) {
   const textoCab = normalizar(cabecalho);
   const regiao = REGIOES_DF.find((ra) => acharTermo(textoCab, [normalizar(ra)])) || null;
 
-  const urls = [...texto.matchAll(/https?:\/\/[^\s)]+/g)].map((m) => m[0].replace(/[.,;]+$/, ""));
+  // Portfólio: só URLs do cabeçalho (links de matéria ou repositório dentro de projetos pertencem ao projeto).
+  const urls = [...cabecalho.matchAll(/https?:\/\/[^\s)]+/g)].map((m) => m[0].replace(/[.,;]+$/, ""));
   const portfolio = urls.find((u) => !/linkedin\.com|github\.com|docs\.google\.com|mailto:/i.test(u)) || null;
 
   return {

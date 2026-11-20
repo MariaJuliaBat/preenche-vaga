@@ -5,7 +5,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { montarConteudo, palavrasChave } = require("../../pipeline/curriculo/conteudo");
-const { linhasDoCv, gerarPdf } = require("../../pipeline/curriculo/pdf");
+const { htmlDoCv, gerarPdf, navegadorDisponivel } = require("../../pipeline/curriculo/pdf");
+const { montarResumo, montarHeadline, focoDaVaga } = require("../../pipeline/curriculo/conteudo");
 const { criarEtapaCurriculo, slug } = require("../../pipeline/curriculo/etapa");
 const { criarEtapaRadar } = require("../../pipeline/radar/etapa");
 const { montarConfig } = require("../../pipeline/config");
@@ -62,21 +63,67 @@ test("CV3: tópicos mais ligados à vaga sobem; nenhum tópico é reescrito", ()
   for (const bloco of [...cv.experiencias, ...cv.projetos]) for (const t of bloco.topicos) assert.ok(todos.has(t), `tópico fora do Perfil: ${t}`);
 });
 
-test("CV3: habilidades da vaga primeiro, as demais depois, sem repetir nem inventar", () => {
+const itensDe = (cv, rotulo) => cv.categorias.find((c) => c.rotulo === rotulo)?.itens || [];
+
+test("CV3: habilidades agrupadas por categoria, as da vaga primeiro em cada grupo, sem repetir nem inventar", () => {
   const { cv } = montarConteudo({ perfil: PERFIL, vaga: VAGA });
-  assert.deepStrictEqual(cv.habilidades.slice(0, 2), ["React", "Node.js"]);
+  assert.deepStrictEqual(cv.categorias.map((c) => c.rotulo), ["Linguagens", "Back-End & APIs", "Banco de Dados", "Front-End"]);
+  assert.deepStrictEqual(itensDe(cv, "Back-End & APIs"), ["Node.js", "Express"]);
+  assert.deepStrictEqual(itensDe(cv, "Front-End"), ["React"]);
   assert.deepStrictEqual([...cv.habilidades].sort(), [...PERFIL.habilidades.tecnicas, ...PERFIL.habilidades.ferramentas].sort());
 });
 
-test("CV3: o resumo é montado só com fatos do Perfil e a stack que a vaga pede", () => {
+test("habilidades: em vaga de desenvolvimento, o que não é tecnologia de software fica de fora; em outras vagas vai para Outras", () => {
+  const perfil = clonar(PERFIL);
+  perfil.habilidades.tecnicas.push("manutenção de aparelhos celulares");
+  const dev = montarConteudo({ perfil, vaga: { titulo: "Desenvolvedora Back-End Júnior", descricao: "Node.js" } }).cv;
+  assert.ok(!dev.habilidades.includes("manutenção de aparelhos celulares"));
+  const outra = montarConteudo({ perfil, vaga: { titulo: "Assistente administrativa", descricao: "Atendimento" } }).cv;
+  assert.deepStrictEqual(itensDe(outra, "Outras"), ["manutenção de aparelhos celulares"]);
+});
+
+test("headline: cargo no foco da vaga + principais tecnologias do Perfil; sem vaga de desenvolvimento, sem cargo inventado", () => {
+  const dev = montarConteudo({ perfil: PERFIL, vaga: { titulo: "[Remoto] Desenvolvedor(a) Back-End Júnior", descricao: "Node.js" } }).cv;
+  assert.strictEqual(dev.headline, "Desenvolvedora Back-End Júnior | Node.js • JavaScript • Python • Express");
+  const outra = montarConteudo({ perfil: PERFIL, vaga: { titulo: "Assistente administrativa", descricao: "" } }).cv;
+  assert.ok(!/Desenvolvedora/.test(outra.headline));
+  const foco = focoDaVaga({ titulo: "Estágio Front-end" });
+  assert.deepStrictEqual([foco.area.rotulo, foco.nivel, foco.desenvolvimento], ["Front-End", "estagio", true]);
+  assert.strictEqual(montarHeadline([], focoDaVaga({ titulo: "Dev Full Stack Pleno" })), "Desenvolvedora Full-Stack");
+});
+
+test("experiência sem tecnologia vira uma linha só em vaga de desenvolvimento; as de tecnologia mantêm os tópicos", () => {
+  const perfil = perfilComVarios();
+  perfil.experiencias.push({ tipo: "experiencia", titulo: "Mediadora", organizacao: "Museu Exemplo", periodo: "2022", descricao: ["Atendimento de visitantes."], tecnologias: [], links: [] });
+  const { cv } = montarConteudo({ perfil, vaga: { titulo: "Desenvolvedora Back-End Júnior", descricao: "Python" } });
+  const mediadora = cv.experiencias.find((e) => e.item.titulo === "Mediadora");
+  assert.deepStrictEqual([mediadora.resumida, mediadora.topicos], [true, []]);
+  assert.strictEqual(cv.experiencias.at(-1), mediadora);
+  assert.ok(cv.experiencias.slice(0, 2).every((e) => e.topicos.length > 0));
+  assert.ok(!htmlDoCv(cv).includes("Atendimento de visitantes"));
+});
+
+test("CV5: o resumo é um parágrafo corrido só com fatos do Perfil, sem rótulos artificiais", () => {
   const { cv } = montarConteudo({ perfil: PERFIL, vaga: VAGA });
   assert.strictEqual(
     cv.resumo,
-    "Licenciatura em Computação (Universidade Exemplo, cursando, previsão 12/2029). Habilidades alinhadas à vaga: React, Node.js. Destaque: Estagiária de Desenvolvimento (Acme Exemplo)."
+    "Cursando Licenciatura em Computação na Universidade Exemplo, com previsão de conclusão em 12/2029. Foco técnico com React e Node.js. Atuei como Estagiária de Desenvolvimento (Acme Exemplo)."
   );
+  assert.ok(!/Habilidades alinhadas|Destaque:/.test(cv.resumo));
   const semMatch = montarConteudo({ perfil: PERFIL, vaga: { titulo: "x", descricao: "Só Cobol." } }).cv.resumo;
-  assert.match(semMatch, /^Licenciatura em Computação .*\. Habilidades: JavaScript, React, Node\.js, Express, Python, MySQL\.$/);
-  assert.ok(!/Destaque/.test(semMatch));
+  assert.match(semMatch, /^Cursando Licenciatura em Computação .*\. Foco técnico com JavaScript, React, Node\.js e Express\.$/);
+});
+
+test("CV5: resumo com sigla da instituição, foco da vaga e projeto de destaque", () => {
+  const perfil = clonar(PERFIL);
+  perfil.formacao[0].sigla = "UnB";
+  perfil.experiencias = [{ tipo: "projeto", titulo: "Confirmador de Inscrições", organizacao: "Python, Playwright", periodo: null, descricao: ["Automatiza conferências."], tecnologias: ["Python"], links: [] }];
+  const { cv } = montarConteudo({ perfil, vaga: { titulo: "Desenvolvedora Back-End Júnior", descricao: "Python" } });
+  assert.strictEqual(
+    cv.resumo,
+    "Cursando Licenciatura em Computação na Universidade Exemplo (UnB), com previsão de conclusão em 12/2029. Foco técnico em desenvolvimento back-end com Python. Desenvolvi o projeto Confirmador de Inscrições (Python, Playwright)."
+  );
+  assert.ok(montarResumo(perfil, [], null).endsWith("."));
 });
 
 test("CV6: texto da vaga é só dado: instrução dentro dele não muda nada além da comparação de palavras", () => {
@@ -84,7 +131,7 @@ test("CV6: texto da vaga é só dado: instrução dentro dele não muda nada al�
   const { cv } = montarConteudo({ perfil: PERFIL, vaga: injetada });
   const texto = JSON.stringify(cv);
   assert.ok(!/Kubernetes|10 anos/i.test(texto));
-  assert.deepStrictEqual(cv.habilidades.slice(0, 1), ["React"]);
+  assert.deepStrictEqual(itensDe(cv, "Front-End"), ["React"]);
 });
 
 test("P12: nada do currículo gerado existe fora do Perfil", () => {
@@ -100,31 +147,60 @@ test("P12: nada do currículo gerado existe fora do Perfil", () => {
   assert.ok(!/docker|\baws\b|\bjava\b/i.test(JSON.stringify(cv.habilidades)));
 });
 
+/** Texto visível do HTML (sem tags), como o ATS lê. */
+const textoDoHtml = (html) => html.replace(/<style>[\s\S]*?<\/style>/g, "").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ");
+
 test("CV8: o PDF só traz a identificação do Perfil (sem CPF nem outros Dados Complementares)", () => {
   const { cv } = montarConteudo({ perfil: PERFIL, vaga: VAGA });
-  const texto = linhasDoCv(cv).map((l) => l.texto).join("\n");
-  assert.ok(!/\d{3}\.\d{3}\.\d{3}-\d{2}/.test(texto));
+  assert.ok(!/\d{3}\.\d{3}\.\d{3}-\d{2}/.test(textoDoHtml(htmlDoCv(cv))));
 });
 
-test("CV2: as linhas do PDF têm as seções esperadas, em ordem, sem imagem ou tabela", () => {
+test("CV2: o HTML tem as seções em ordem, listas reais, datas sem quebra e nenhuma tabela, imagem ou ícone", () => {
   const { cv } = montarConteudo({ perfil: PERFIL, vaga: VAGA });
-  const linhas = linhasDoCv(cv);
-  const secoes = linhas.filter((l) => l.tipo === "secao").map((l) => l.texto);
-  assert.deepStrictEqual(secoes, ["Resumo", "Experiência", "Projetos", "Formação", "Habilidades", "Idiomas"]);
-  assert.strictEqual(linhas[0].texto, "Maria Exemplo");
-  assert.match(linhas[1].texto, /maria\.exemplo@exemplo\.com \| \(61\) 99999-0000 \| Brasília - DF/);
-  assert.ok(linhas.some((l) => l.tipo === "titulo" && l.texto === "Estagiária de Desenvolvimento | Acme Exemplo | 2024 - 2025"));
-  assert.ok(linhas.some((l) => l.tipo === "titulo" && /Licenciatura em Computação \| Universidade Exemplo \| cursando \| previsão 12\/2029/.test(l.texto)));
+  const html = htmlDoCv(cv);
+  assert.deepStrictEqual([...html.matchAll(/<h2>(.*?)<\/h2>/g)].map((m) => m[1]), ["Resumo", "Experiência", "Projetos", "Formação", "Habilidades", "Idiomas"]);
+  assert.match(html, /<h1>Maria Exemplo<\/h1>/);
+  assert.match(html, /<p class="headline">Desenvolvedora de Software Júnior \| /);
+  assert.match(html, /<li>Criei telas em React para o painel interno\.<\/li>/);
+  assert.match(html, /<span class="cargo">Estagiária de Desenvolvimento<\/span> <span class="org">— Acme Exemplo<\/span>.*<span class="data">2024 - 2025<\/span>/);
+  assert.match(html, /\.data \{[^}]*white-space: nowrap/);
+  assert.match(html, /<b>Back-End &amp; APIs:<\/b> Node\.js, Express/);
+  assert.ok(!/<table|<img|<svg|<canvas/i.test(html));
+  assert.match(textoDoHtml(html), /maria\.exemplo@exemplo\.com\s+\(61\) 99999-0000\s+Brasília - DF/);
 });
 
-test("CV2: gerarPdf escreve um PDF A4 de uma página, com texto", async () => {
+test("links: o cabeçalho só tem contatos e perfis; repositório e matéria ficam no projeto, com rótulo e URL exata", () => {
+  const perfil = clonar(PERFIL);
+  perfil.identificacao.portfolio = "https://www.veiculo.exemplo/ciencia/materia-do-satelite";
+  perfil.experiencias[1].links = [
+    { rotulo: "Repositório", url: "https://github.com/MariaJuliaBat/Meu-Repo" },
+    { rotulo: "Notícia", url: "https://www.veiculo.exemplo/ciencia/materia-do-satelite" }
+  ];
+  const html = htmlDoCv(montarConteudo({ perfil, vaga: VAGA }).cv);
+  const contato = /<p class="contato">(.*?)<\/p>/.exec(html)[1];
+  assert.ok(!/veiculo\.exemplo|Meu-Repo/.test(contato));
+  assert.match(contato, /linkedin\.com\/in\/maria-exemplo/);
+  assert.match(contato, /github\.com\/mariaexemplo/);
+  assert.match(html, /Repositório: <a href="https:\/\/github\.com\/MariaJuliaBat\/Meu-Repo">github\.com\/MariaJuliaBat\/Meu-Repo<\/a>/);
+  assert.match(html, /Notícia: <a href="https:\/\/www\.veiculo\.exemplo\/ciencia\/materia-do-satelite">/);
+  assert.ok(!html.includes('class="portfolio"'));
+
+  // portfólio que não está em nenhum projeto vai para uma linha dedicada, rotulada
+  perfil.experiencias[1].links = [];
+  const solto = htmlDoCv(montarConteudo({ perfil, vaga: VAGA }).cv);
+  assert.match(solto, /<p class="portfolio"><b>Portfólio \/ Imprensa:<\/b> <a href=/);
+  assert.ok(!/veiculo\.exemplo/.test(/<p class="contato">(.*?)<\/p>/.exec(solto)[1]));
+});
+
+test("CV2: gerarPdf escreve um PDF A4 de uma página, com texto", async (t) => {
+  if (!(await navegadorDisponivel())) return t.skip("sem Chrome ou Edge");
   const { cv } = montarConteudo({ perfil: PERFIL, vaga: VAGA });
   const destino = path.join(pastaTemp(), "sub", "cv.pdf");
-  assert.strictEqual(await gerarPdf(cv, destino, { comprimir: false }), destino);
+  assert.strictEqual(await gerarPdf(cv, destino), destino);
   const bytes = fs.readFileSync(destino);
   assert.strictEqual(bytes.subarray(0, 5).toString(), "%PDF-");
   assert.ok(bytes.length > 1000);
-  assert.strictEqual((bytes.toString("latin1").match(/\/Type \/Page\b/g) || []).length, 1);
+  assert.strictEqual((bytes.toString("latin1").match(/\/Type\s*\/Page\b/g) || []).length, 1);
 });
 
 // ---- Etapa curriculo ----
@@ -246,7 +322,7 @@ test("grafias equivalentes: 'Node' na vaga casa com 'Node.js' do Perfil e não v
   assert.deepStrictEqual(lacunas, ["postgres"]); // MySQL não é Postgres
   const { cv } = montarConteudo({ perfil: perfilComVarios(), vaga: { titulo: "x", descricao: "Experiência com Node." } });
   assert.strictEqual(cv.projetos[0].item.titulo, "Gerenciador de Tarefas");
-  assert.deepStrictEqual(cv.habilidades.slice(0, 1), ["Node.js"]);
+  assert.deepStrictEqual(itensDe(cv, "Back-End & APIs").slice(0, 1), ["Node.js"]);
 });
 
 // ---- --only-cv autônomo: vagas vindas da planilha ----
