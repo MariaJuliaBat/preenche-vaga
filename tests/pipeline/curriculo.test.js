@@ -169,6 +169,26 @@ test("CV2: o HTML tem as seções em ordem, listas reais, datas sem quebra e nen
   assert.match(textoDoHtml(html), /maria\.exemplo@exemplo\.com\s+\(61\) 99999-0000\s+Brasília - DF/);
 });
 
+test("CV2 (extração de texto): data colada ao cargo na mesma linha; sem float, posição, grid, flex ou tabela; bullet é texto; URL sem espaço", () => {
+  const perfil = clonar(PERFIL);
+  perfil.experiencias[1].links = [{ rotulo: "Repositório", url: "https://github.com/ana-exemplo/Mini Projeto-M4-API" }];
+  const html = htmlDoCv(montarConteudo({ perfil, vaga: VAGA }).cv);
+  const css = /<style>([\s\S]*?)<\/style>/.exec(html)[1];
+  // Extratores que detectam colunas por posição separam uma data alinhada à direita do seu cargo: nada de layout em colunas.
+  assert.ok(!/float\s*:|position\s*:|display\s*:\s*(flex|grid|table)|<table/i.test(css + html), "sem float, position, flex, grid ou tabela");
+  // Cada cabeçalho de item é UMA linha de texto: cargo, organização e período no mesmo <div>, sem <div> interno.
+  const linhas = [...html.matchAll(/<div class="linha">(.*?)<\/div>/g)].map((m) => m[1]);
+  assert.ok(linhas.length >= 3);
+  for (const l of linhas) assert.ok(!/<div/.test(l) && /class="cargo"/.test(l), l);
+  assert.ok(linhas.some((l) => /class="cargo">Estagiária de Desenvolvimento<\/span>.*class="data">2024 - 2025<\/span>/.test(l)), "data no mesmo <div> do cargo");
+  // O marcador nativo do <li> é uma forma vetorial (some na extração): o "•" vem de texto gerado.
+  assert.match(css, /ul \{[^}]*list-style: none/);
+  assert.match(css, /li::before \{[^}]*content: "•"/);
+  // URL: espaços internos removidos, no texto e no href.
+  assert.match(html, /href="https:\/\/github\.com\/ana-exemplo\/MiniProjeto-M4-API">github\.com\/ana-exemplo\/MiniProjeto-M4-API<\/a>/);
+  assert.ok(!/Mini Projeto/.test(html));
+});
+
 test("links: o cabeçalho só tem contatos e perfis; repositório e matéria ficam no projeto, com rótulo e URL exata", () => {
   const perfil = clonar(PERFIL);
   perfil.identificacao.portfolio = "https://www.veiculo.exemplo/ciencia/materia-do-satelite";
