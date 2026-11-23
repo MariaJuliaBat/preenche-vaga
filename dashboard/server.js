@@ -8,6 +8,7 @@ const path = require("node:path");
 const { lerArquivoEnv, montarConfig } = require("../pipeline/config");
 const { calcularCota, lerLote, listarCurriculos, caminhoDoPdf, lerLog, ARQUIVOS_DE_LOG } = require("./dados");
 const { criarExecutor } = require("./executor");
+const { criarAgenteDoProjeto } = require("../pipeline/agente/agente");
 
 const HOST = "127.0.0.1";
 const PORTA_PADRAO = 4173;
@@ -18,6 +19,9 @@ const ESTATICOS = Object.freeze({
   "/estilo.css": ["estilo.css", "text/css; charset=utf-8"]
 });
 const LIMITE_DO_CORPO = 4096;
+const LIMITE_DO_CORPO_ASSISTENTE = 10000;
+const LIMITE_DA_PERGUNTA = 2000;
+const MODOS_DO_ASSISTENTE = ["conversa", "analise"];
 
 /** Host aceito: só o próprio endereço local (D2). @param {string | undefined} valor */
 const hostLocal = (valor) => /^(127\.0\.0\.1|localhost)(:\d+)?$/i.test(valor || "");
@@ -42,13 +46,13 @@ function json(res, status, corpo) {
   res.end(JSON.stringify(corpo));
 }
 
-/** @param {http.IncomingMessage} req @returns {Promise<any>} */
-function lerCorpo(req) {
+/** @param {http.IncomingMessage} req @param {number} [limite] @returns {Promise<any>} */
+function lerCorpo(req, limite = LIMITE_DO_CORPO) {
   return new Promise((resolve, reject) => {
     let texto = "";
     req.on("data", (pedaco) => {
       texto += pedaco;
-      if (texto.length > LIMITE_DO_CORPO) { reject(new Error("Corpo grande demais.")); req.destroy(); }
+      if (texto.length > limite) { reject(new Error("Corpo grande demais.")); req.destroy(); }
     });
     req.on("end", () => { try { resolve(texto ? JSON.parse(texto) : {}); } catch { reject(new Error("JSON inválido.")); } });
     req.on("error", reject);
@@ -56,9 +60,11 @@ function lerCorpo(req) {
 }
 
 /**
- * @param {{ config: ReturnType<typeof montarConfig>, executor?: ReturnType<typeof criarExecutor> }} args
+ * @typedef {{ executar: (args: { pergunta: string, modo?: "conversa" | "analise", perguntaDoFormulario?: string, onEvento?: (e: any) => void }) => Promise<unknown> }} Assistente
+ * @param {{ config: ReturnType<typeof montarConfig>, executor?: ReturnType<typeof criarExecutor>, assistente?: Assistente | null }} args
+ * `assistente` é o Agente (pipeline/agente); null = sem GEMINI_API_KEY (S4).
  */
-function criarServidor({ config, executor = criarExecutor() }) {
+function criarServidor({ config, executor = criarExecutor(), assistente = null }) {
   return http.createServer(async (req, res) => {
     try {
       const proibido = validarRequisicao(req);
@@ -87,7 +93,8 @@ function criarServidor({ config, executor = criarExecutor() }) {
           loteGeradoEm: lote.geradoEm,
           lote: lote.vagas.map((v) => ({ titulo: String(v.titulo || ""), empresa: String(v.empresa || ""), url: String(v.url || ""), ehVagaDF: Boolean(v.ehVagaDF), pontos: Number(v.pontos) || 0 })),
           contagens: Object.fromEntries(Object.keys(ARQUIVOS_DE_LOG).map((t) => [t, lerLog(config, /** @type {keyof typeof ARQUIVOS_DE_LOG} */ (t)).total])),
-          execucao: executor.estado()
+          execucao: executor.estado(),
+          assistente: { disponivel: Boolean(assistente) }
         });
       }
 
@@ -122,8 +129,31 @@ function criarServidor({ config, executor = criarExecutor() }) {
         return resultado.ok ? json(res, 202, executor.estado()) : json(res, resultado.status, { erro: resultado.erro });
       }
 
+      if (req.method === "POST" && rota === "/api/assistente") { // S1 a S4: streaming (SSE) do Agente
+        const corpo = await lerCorpo(req, LIMITE_DO_CORPO_ASSISTENTE);
+        const pergunta = typeof corpo.pergunta === "string" ? corpo.pergunta.trim() : "";
+        const formulario = typeof corpo.perguntaDoFormulario === "string" ? corpo.perguntaDoFormulario.trim() : "";
+        const modo = corpo.modo === undefined ? "conversa" : corpo.modo;
+        if (!pergunta || pergunta.length > LIMITE_DA_PERGUNTA || formulario.length > LIMITE_DA_PERGUNTA || !MODOS_DO_ASSISTENTE.includes(modo)) {
+          return json(res, 400, { erro: `Envie "pergunta" (1 a ${LIMITE_DA_PERGUNTA} caracteres) e "modo" conversa ou analise.` });
+        }
+        if (!assistente) return json(res, 503, { erro: "Assistente indisponível: coloque GEMINI_API_KEY no .env e reinicie o Dashboard." });
+        res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-store", Connection: "keep-alive", "X-Content-Type-Options": "nosniff" });
+        let aberto = true;
+        res.on("close", () => { aberto = false; });
+        await assistente.executar({
+          pergunta, modo, perguntaDoFormulario: formulario || undefined,
+          onEvento: (evento) => { if (aberto) res.write(`event: ${evento.tipo}
+data: ${JSON.stringify(evento)}
+
+`); }
+        });
+        return res.end();
+      }
+
       return json(res, 404, { erro: "Rota não encontrada." });
     } catch (erro) {
+      if (res.headersSent) return res.end(); // SSE já começou: só encerra
       return json(res, 400, { erro: erro instanceof Error ? erro.message : "Erro." });
     }
   });
@@ -133,7 +163,9 @@ if (require.main === module) {
   const env = { ...lerArquivoEnv(), ...process.env };
   const config = montarConfig(env);
   const porta = Number.parseInt(env.DASHBOARD_PORT || "", 10) || PORTA_PADRAO;
-  criarServidor({ config }).listen(porta, HOST, () => console.log(`Dashboard em http://${HOST}:${porta} (Ctrl+C para sair)`));
+  // O Agente só existe com GEMINI_API_KEY; sem ela a aba Assistente IA avisa (S4).
+  const assistente = env.GEMINI_API_KEY ? criarAgenteDoProjeto({ raiz: path.join(__dirname, ".."), pastaSaida: config.pastas.saida, env }) : null;
+  criarServidor({ config, assistente }).listen(porta, HOST, () => console.log(`Dashboard em http://${HOST}:${porta} (Ctrl+C para sair)`));
 }
 
 module.exports = { criarServidor, validarRequisicao, HOST };

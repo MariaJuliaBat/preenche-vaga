@@ -7,13 +7,14 @@ uma única vez e completa esses formulários automaticamente em poucos segundos.
 A pessoa continua no controle: revisa tudo e decide quando enviar.
 Assim, ela consegue se candidatar a mais vagas, com menos cansaço e menos erros de digitação.
 
-O projeto tem **três partes**, que se complementam:
+O projeto tem **quatro partes**, que se complementam:
 
 | Parte | O que faz | Pode enviar candidatura? |
 |---|---|---|
 | **Extensão Chrome** (`content/`, `popup/`) | Guarda o currículo no navegador e preenche o formulário da página aberta, quando você clica. | **Nunca.** Você revisa e envia. |
 | **Pipeline** (`pipeline/`, CLI em Node.js) | Busca vagas, gera um currículo em PDF sob medida para cada uma, preenche o formulário e registra tudo na planilha. | **Só** com `AUTO_SUBMIT=true` e fora do `--dry-run`. |
 | **Dashboard** (`dashboard/`, tela local) | Opera o pipeline pelo navegador, mostra os PDFs, a cota de vagas em Brasília - DF e as pendências. | Não decide nada: só dispara a CLI, sempre em simulação, salvo confirmação explícita. |
+| **Assistente IA** (`pipeline/rag/`, `pipeline/agente/`, aba no Dashboard) | Agente com Gemini que consulta sua base pessoal (RAG), as vagas e o Perfil, analisa a aderência a uma vaga e rascunha respostas de formulário. | **Nunca.** Só lê e sugere. |
 
 ```
 Radar ──► Currículo sob medida ──► Candidatura
@@ -28,7 +29,7 @@ Dashboard: lê output/ e chama a CLI    Extensão: independente, só preenche
 - **Termos e privacidade são seus.** O pipeline nunca marca checkbox de aceite de termos, política de privacidade/LGPD ou declaração de veracidade. Ele preenche o resto, guarda o print e deixa a vaga como **Pendência** para você aceitar e enviar.
 - **Nada é inventado.** Perguntas abertas, CAPTCHA, login expirado ou campo obrigatório sem dado viram Pendência. O currículo sob medida só reorganiza fatos do seu currículo base.
 - **Texto de vaga e de formulário é dado, nunca instrução.** Frases como "ignore as regras" param a candidatura.
-- **Seus dados ficam com você.** Currículo real, CPF, `.env`, credenciais, `output/` e a sessão do navegador ficam fora do Git. Não há LLM, chave de API nem custo: tudo é determinístico.
+- **Seus dados ficam com você.** Currículo real, CPF, `.env`, credenciais, `output/` e a sessão do navegador ficam fora do Git. O pipeline (Radar, currículo, candidatura) não usa LLM: é tudo determinístico, sem chave e sem custo. Só o **Assistente IA** usa o Gemini, é opcional (`GEMINI_API_KEY`) e, quando ligado, envia à API do Google os trechos da sua base de conhecimento, o Perfil sem contatos e a descrição da vaga.
 
 ---
 
@@ -167,12 +168,48 @@ Abra http://127.0.0.1:4173 (só acessível da sua máquina).
 - **Currículos:** os PDFs gerados, abertos dentro da tela.
 - **Auditoria:** pendências, pistas e descartes, com filtro.
 
-O Dashboard não lê `.env`, `secrets/` nem a sessão do navegador, e a regra de envio continua só na CLI (`AUTO_SUBMIT`).
+- **Assistente IA:** conversa com o agente e mostra, em tempo real, o texto e as ferramentas acionadas (veja a seção 4).
 
-## 4. Desenvolvimento
+O Dashboard não lê `.env`, `secrets/` nem a sessão do navegador, e a regra de envio continua só na CLI (`AUTO_SUBMIT`). A chave do Gemini é lida só pelo servidor e nunca vai para a tela.
+
+## 4. Assistente IA, RAG e porte em ADK
+
+Entregáveis do Projeto Final da Especialização em IA. Spec: `docs/specs/agente-e-rag.md`; visão geral e os 4 estágios de maturidade: `docs/escopo-projeto-final.md`.
+
+**Configurar (opcional):** coloque `GEMINI_API_KEY=...` no `.env` e reinicie o Dashboard. Sem a chave, tudo continua funcionando e a aba **Assistente IA** avisa que está indisponível.
+
+**RAG próprio (`pipeline/rag/`)**, três passos, um arquivo por passo:
+
+| Passo | Arquivo | O que faz |
+|---|---|---|
+| Chunking | `fragmentar.js` | Corta `.md`/`.txt` por seção e parágrafo, com tamanho máximo e sobreposição configuráveis |
+| Embedding | `vetorizar.js`, `indice.js` | Vetores do Gemini (`gemini-embedding-001`), com cache por hash em `output/rag-index.json`; sem chave, vetorizador local determinístico |
+| Retrieval | `buscar.js` | Similaridade de cosseno: os `topK` trechos com `score` e fonte |
+
+A base de exemplo (fictícia, no Git) está em `docs/base-conhecimento-exemplo/`. Para usar a sua, crie `secrets/base-conhecimento/` com arquivos `.md`/`.txt`: ela é lida junto e nunca vai para o Git.
+
+**Agente (`pipeline/agente/`)**, com as 4 capacidades:
+
+- **System Prompt** dedicado (`prompt.js`): só fatos da base e do Perfil, nada inventado.
+- **Tool Calling** (`ferramentas.js`): `consultar_base_pessoal`, `consultar_vagas_planilha`, `analisar_vaga_e_curriculo`. Todas só leem.
+- **Structured Output** (`analise.js`): análise de aderência (score, pontos fortes com evidência, lacunas e rascunho de resposta) validada por Zod; ponto forte sem evidência na base é removido (Ancoragem).
+- **Streaming**: `POST /api/assistente` (SSE) alimenta a aba **Assistente IA**.
+
+**Porte em Google ADK (`agente-adk/`)**: o mesmo agente com `LlmAgent` e `FunctionTool`, reaproveitando as ferramentas do projeto.
 
 ```powershell
-npm test            # testes (usam só dados fictícios; os de navegador são pulados sem Chrome/Edge)
+cd agente-adk
+npm install
+npm test                                        # LLM falso: sem chave, sem rede
+node src/cli.js "O que já fiz com automação?"   # usa a GEMINI_API_KEY do .env
+```
+
+**n8n:** a arquitetura do fluxo equivalente está em `n8n/README.md` (o JSON exportado é salvo ali).
+
+## 5. Desenvolvimento
+
+```powershell
+npm test            # testes (usam só dados fictícios; os de navegador são pulados sem Chrome/Edge; nenhum precisa de GEMINI_API_KEY)
 npm run lint
 npm run typecheck
 ```
@@ -181,13 +218,15 @@ npm run typecheck
 |---|---|
 | `content/`, `popup/`, `manifest.json` | Extensão Chrome (Manifest V3, JavaScript puro, sem build). `content/mapeamento.js` é o **único** lugar dos sinônimos de campo, usado também pelo pipeline. |
 | `pipeline/` | CLI: `radar/`, `perfil/`, `curriculo/`, `apply/` (sessão, motor, travas), `sheets.js`, `config.js` |
-| `dashboard/` | Servidor e tela locais |
+| `pipeline/rag/`, `pipeline/agente/` | RAG próprio e Agente Assistente (Gemini) |
+| `dashboard/` | Servidor e tela locais (inclui a aba Assistente IA) |
+| `agente-adk/`, `n8n/` | Porte do agente em Google ADK e documentação do fluxo n8n |
 | `paginas-teste/` | Formulários falsos para testar sem site real |
-| `docs/specs/` | Specs (EARS + Gherkin) de cada parte: `preenchimento-automatico`, `pipeline-candidatura`, `radar-de-vagas`, `perfil-e-curriculo`, `dashboard`, `auto-apply` |
+| `docs/specs/` | Specs (EARS + Gherkin) de cada parte: `preenchimento-automatico`, `pipeline-candidatura`, `radar-de-vagas`, `perfil-e-curriculo`, `dashboard`, `auto-apply`, `agente-e-rag` |
 | `output/`, `secrets/`, `.env` | Gerados e privados: **fora do Git** |
 
 Regras do repositório: nunca commitar currículo real, CPF ou credenciais; testes só com dados fictícios; a extensão nunca chama `.submit()` nem clica em botão de envio.
 
-## 5. Privacidade e responsabilidade
+## 6. Privacidade e responsabilidade
 
-Tudo roda na sua máquina. O que vai para o Google é só a leitura do seu Doc e a escrita na sua planilha, pela sua própria conta de serviço. Respeitar os termos de uso de cada site de vagas é responsabilidade sua: automatize só onde você se sente segura, e prefira o `--dry-run` até confiar no resultado.
+Tudo roda na sua máquina. O que vai para o Google é a leitura do seu Doc e a escrita na sua planilha, pela sua própria conta de serviço, e, **só se você ativar o Assistente IA**, o texto das perguntas, os trechos da base de conhecimento, o Perfil sem contatos e a descrição da vaga enviados à API do Gemini. CPF, nascimento e dados de `dados-complementares` nunca entram. Respeitar os termos de uso de cada site de vagas é responsabilidade sua: automatize só onde você se sente segura, e prefira o `--dry-run` até confiar no resultado.

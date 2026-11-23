@@ -13,3 +13,7 @@ token*.json
 
 # PDFs gerados só ficam em output/ (ignorado); nenhum PDF solto vai para o Git
 *.pdf
+
+# Instaladores e arquivos soltos
+*.torrent
+*.exe
