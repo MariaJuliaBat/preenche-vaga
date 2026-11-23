@@ -73,6 +73,7 @@ function mostrarExecucao(exec) {
 let autoSubmitLigado = false;
 const BOTOES_DE_EXECUCAO = ["rodar-radar", "rodar-cv", "rodar-candidatura", "login-gupy", "login-indeed", "login-infojobs", "login-branco"];
 let esperaAnterior = false;
+let assistenteOcupado = false; // evita que o polling reabilite o botão durante o streaming
 async function atualizarEstado() {
   try {
     const estado = await api("/api/estado");
@@ -81,6 +82,8 @@ async function atualizarEstado() {
     const total = Object.values(estado.contagens).reduce((a, b) => a + b, 0);
     $("contagem-auditoria").textContent = total > 0 ? String(total) : "";
     mostrarCota(estado);
+    $("assistente-aviso").hidden = Boolean(estado.assistente?.disponivel);
+    $("assistente-enviar").disabled = assistenteOcupado || !estado.assistente?.disponivel;
     mostrarExecucao(estado.execucao);
     if (esperaAnterior && !estado.execucao.rodando) {
       if (abaAtual === "curriculos") carregarCurriculos();
@@ -198,6 +201,77 @@ for (const b of document.querySelectorAll(".sub-abas button")) {
   });
 }
 $("filtro").addEventListener("input", desenharAuditoria);
+
+// ---- Assistente IA: lê o streaming (SSE) do Agente. Tudo entra por textContent (S5). ----
+function lerEventoSse(bloco) {
+  const tipo = (/^event: (.*)$/m.exec(bloco) || [])[1];
+  const dados = bloco.split("\n").filter((l) => l.startsWith("data: ")).map((l) => l.slice(6)).join("");
+  if (!tipo || !dados) return null;
+  try { return JSON.parse(dados); } catch { return null; }
+}
+
+function mostrarAnalise(dados, avisos) {
+  const caixa = $("assistente-analise-resultado");
+  const lista = (itens, vazio) => el("ul", { classe: "lista" }, ...(itens.length ? itens : [vazio]).map((t) => el("li", { texto: t })));
+  caixa.replaceChildren(
+    el("h2", { texto: `Aderência: ${dados.score}/100` }),
+    el("p", { texto: dados.resumo }),
+    el("h2", { texto: "Pontos fortes" }),
+    lista(dados.pontosFortes.map((p) => `${p.ponto} — evidência: "${p.evidencia}"`), "Nenhum ponto forte com evidência."),
+    el("h2", { texto: "Lacunas" }),
+    lista(dados.lacunas, "Nenhuma lacuna apontada."),
+    ...(dados.rascunhoResposta ? [el("h2", { texto: "Rascunho de resposta" }), el("p", { classe: "dica", texto: dados.rascunhoResposta.pergunta }), el("pre", { classe: "saida", texto: dados.rascunhoResposta.resposta })] : []),
+    ...(avisos.length ? [el("h2", { texto: "Avisos de ancoragem" }), lista(avisos, "")] : [])
+  );
+}
+
+function tratarEventoDoAssistente(e) {
+  if (e.tipo === "texto") $("assistente-resposta").textContent += e.texto;
+  else if (e.tipo === "ferramenta" && e.estado === "inicio") $("assistente-ferramentas").append(el("li", { texto: `${e.nome}(${JSON.stringify(e.args || {})})` }));
+  else if (e.tipo === "ferramenta") $("assistente-ferramentas").lastElementChild?.append(el("span", { classe: "etiqueta", texto: e.ok ? " ✓ ok" : " ✗ erro" }));
+  else if (e.tipo === "analise") mostrarAnalise(e.dados, e.avisos || []);
+  else if (e.tipo === "erro") $("assistente-status").textContent = `Erro: ${e.mensagem}`;
+  else if (e.tipo === "fim") $("assistente-status").textContent = e.ok ? `Pronto (${e.passos} passo(s)).` : $("assistente-status").textContent || "Terminou com erro.";
+}
+
+async function perguntarAoAssistente() {
+  const pergunta = $("assistente-pergunta").value.trim();
+  if (!pergunta) { $("assistente-status").textContent = "Escreva uma pergunta."; return; }
+  assistenteOcupado = true;
+  $("assistente-enviar").disabled = true;
+  $("assistente-status").textContent = "Pensando…";
+  $("assistente-resposta").textContent = "";
+  $("assistente-ferramentas").replaceChildren();
+  $("assistente-analise-resultado").replaceChildren();
+  try {
+    const resposta = await fetch("/api/assistente", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pergunta, perguntaDoFormulario: $("assistente-formulario").value.trim() || undefined, modo: $("assistente-analise").checked ? "analise" : "conversa" })
+    });
+    if (!resposta.ok) throw new Error((await resposta.json().catch(() => ({}))).erro || `Erro ${resposta.status}`);
+    const leitor = resposta.body.getReader();
+    const decodificador = new TextDecoder();
+    let resto = "";
+    for (;;) {
+      const { done, value } = await leitor.read();
+      if (done) break;
+      resto += decodificador.decode(value, { stream: true });
+      let fim;
+      while ((fim = resto.indexOf("\n\n")) !== -1) {
+        const evento = lerEventoSse(resto.slice(0, fim));
+        resto = resto.slice(fim + 2);
+        if (evento) tratarEventoDoAssistente(evento);
+      }
+    }
+  } catch (erro) {
+    $("assistente-status").textContent = `Erro: ${erro.message}`;
+  } finally {
+    assistenteOcupado = false;
+    $("assistente-enviar").disabled = false;
+  }
+}
+$("assistente-enviar").addEventListener("click", perguntarAoAssistente);
 
 atualizarEstado();
 setInterval(atualizarEstado, 2000);

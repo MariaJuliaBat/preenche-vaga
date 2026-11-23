@@ -14,7 +14,7 @@ module.exports = [
   },
   {
     // Scripts de build e testes: rodam no Node.
-    files: ["scripts/**/*.js", "pipeline/**/*.js", "dashboard/*.js", "tests/**/*.js", "eslint.config.js"],
+    files: ["scripts/**/*.js", "agente-adk/**/*.js", "pipeline/**/*.js", "dashboard/*.js", "tests/**/*.js", "eslint.config.js"],
     languageOptions: {
       sourceType: "commonjs",
       globals: globals.node

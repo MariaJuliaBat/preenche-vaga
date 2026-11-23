@@ -16,6 +16,7 @@
     <button role="tab" data-aba="operar" aria-selected="true">Operar</button>
     <button role="tab" data-aba="cota" aria-selected="false">Cota DF</button>
     <button role="tab" data-aba="curriculos" aria-selected="false">Currículos</button>
+    <button role="tab" data-aba="assistente" aria-selected="false">Assistente IA</button>
     <button role="tab" data-aba="auditoria" aria-selected="false">Auditoria <span id="contagem-auditoria" class="contagem"></span></button>
   </nav>
 
@@ -73,6 +74,34 @@
         <div class="cartao visualizador">
           <p id="pdf-vazio" class="dica">Escolha um currículo na lista.</p>
           <iframe id="pdf" title="Currículo selecionado" hidden></iframe>
+        </div>
+      </div>
+    </section>
+
+    <section id="aba-assistente" class="painel" hidden>
+      <div class="duas-colunas">
+        <div class="cartao">
+          <h2>Assistente de Candidatura</h2>
+          <p class="dica">Usa o Gemini com as suas ferramentas (Base de Conhecimento, vagas e Perfil). Ele só lê e sugere: nunca envia candidatura. O texto enviado ao modelo sai do seu computador.</p>
+          <p id="assistente-aviso" class="aviso" hidden>Assistente indisponível: coloque <code>GEMINI_API_KEY</code> no <code>.env</code> e reinicie o Dashboard.</p>
+          <label class="campo">Pergunta
+            <textarea id="assistente-pergunta" rows="3" maxlength="2000" placeholder="Ex.: Analise a vaga de Estágio em Node.js e diga se vale a pena."></textarea>
+          </label>
+          <label class="campo">Pergunta aberta do formulário (opcional)
+            <textarea id="assistente-formulario" rows="2" maxlength="2000" placeholder="Ex.: Por que você quer trabalhar aqui?"></textarea>
+          </label>
+          <label class="opcao"><input type="checkbox" id="assistente-analise"> Devolver Análise de Aderência (saída estruturada)</label>
+          <div class="botoes">
+            <button id="assistente-enviar" class="primario">Perguntar</button>
+          </div>
+          <p id="assistente-status" class="status" role="status"></p>
+        </div>
+        <div class="cartao">
+          <h2>Ferramentas acionadas</h2>
+          <ul id="assistente-ferramentas" class="lista"></ul>
+          <h2>Resposta</h2>
+          <pre id="assistente-resposta" class="saida" aria-label="Resposta do assistente" aria-live="polite"></pre>
+          <div id="assistente-analise-resultado"></div>
         </div>
       </div>
     </section>

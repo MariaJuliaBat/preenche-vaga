@@ -62,3 +62,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+
+  # Porte do Agente em Google ADK: pasta com package.json próprio; o teste usa LLM falso (sem GEMINI_API_KEY).
+  test-agente-adk:
+    name: test (agente-adk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            agente-adk/package-lock.json
+      # O porte reaproveita pipeline/ (RAG, ferramentas), que usa as dependências da raiz.
+      - run: npm ci
+      - run: npm ci
+        working-directory: agente-adk
+      - run: npm test
+        working-directory: agente-adk

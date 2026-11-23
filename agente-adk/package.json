@@ -1,0 +1,16 @@
+{
+  "name": "preenche-vaga-agente-adk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Porte do Agente Assistente de Candidatura para o Google ADK (Node.js).",
+  "main": "src/agente.js",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "start": "node src/cli.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@google/adk": "^2.5.0",
+    "zod": "^4.6.7"
+  }
+}
