@@ -3,6 +3,7 @@ const PESOS = Object.freeze({
   iaAplicada: 5,       // por grupo de termos de IA aplicada encontrado
   termoDaStack: 2,     // por habilidade do Perfil encontrada
   nivelExplicito: 1,   // Estágio, Júnior ou Trainee explícito
+  areaDesenvolvimento: 3, // desenvolvimento, automação e IA sobem no ranking; as demais áreas de TI (suporte, infra, dados...) só passam
   vagaDF: 2            // presencial ou híbrida em Brasília - DF sobe no ranking
 });
 

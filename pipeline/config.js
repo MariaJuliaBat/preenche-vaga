@@ -70,6 +70,21 @@ function lerInteiroPositivo(valor, nome, padrao) {
   return Number.parseInt(valor.trim(), 10);
 }
 
+/** Fontes do Radar, na ordem de busca. As com busca focada em Brasília - DF vêm antes do GitHub. */
+const FONTES_DO_RADAR = Object.freeze(["gupy", "solides", "infojobs", "linkedin", "indeed", "github"]);
+
+/**
+ * RADAR_FONTES: lista de fontes separadas por vírgula; vazio usa todas. Fonte desconhecida é erro (nada de adivinhar).
+ * @param {string | undefined} valor
+ */
+function lerFontes(valor) {
+  const pedidas = String(valor || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (pedidas.length === 0) return [...FONTES_DO_RADAR];
+  const desconhecida = pedidas.find((f) => !FONTES_DO_RADAR.includes(f));
+  if (desconhecida) throw new Error(`RADAR_FONTES tem uma fonte desconhecida ("${desconhecida}"). Use: ${FONTES_DO_RADAR.join(", ")}.`);
+  return [...new Set(pedidas)];
+}
+
 /** @param {string | undefined} valor */
 const lerLista = (valor) => String(valor || "").split(",").map((x) => x.trim()).filter(Boolean);
 
@@ -110,6 +125,7 @@ function montarConfig(env, opcoes = {}) {
     radar: {
       vigenciaDias: lerInteiroPositivo(env.RADAR_VIGENCIA_DIAS, "RADAR_VIGENCIA_DIAS", 20),
       maxVagasLote: lerInteiroPositivo(env.MAX_VAGAS_LOTE, "MAX_VAGAS_LOTE", 10),
+      fontes: lerFontes(env.RADAR_FONTES),
       reposGithub: env.RADAR_REPOS_GITHUB !== undefined && env.RADAR_REPOS_GITHUB !== ""
         ? lerLista(env.RADAR_REPOS_GITHUB)
         : ["frontendbr/vagas", "backend-br/vagas"],

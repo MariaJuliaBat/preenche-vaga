@@ -5,7 +5,7 @@ const { spawn } = require("node:child_process");
 const path = require("node:path");
 
 const ETAPAS_PERMITIDAS = Object.freeze({ radar: "--only-radar", curriculo: "--only-cv", candidatura: "--only-apply" });
-const PORTAIS_DE_LOGIN = Object.freeze(["gupy", "trampos"]);
+const PORTAIS_DE_LOGIN = Object.freeze(["gupy", "indeed", "infojobs"]);
 const MAX_LINHAS = 500;
 
 /**

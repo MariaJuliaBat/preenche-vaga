@@ -8,8 +8,8 @@ const { PESOS } = require("../../../pipeline/radar/pesos");
 const vaga = (descricao, titulo = "Dev Júnior") => ({ titulo, url: "https://vagas.exemplo/p/1", descricao, rotulos: [], fonte: "Teste" });
 const PERFIL = { habilidades: ["React", "Node.js", "Python"] };
 
-test("pesos aprovados: IA 5, stack 2, nível 1, Vaga DF +2", () => {
-  assert.deepStrictEqual({ ...PESOS }, { iaAplicada: 5, termoDaStack: 2, nivelExplicito: 1, vagaDF: 2 });
+test("pesos aprovados: IA 5, stack 2, nível 1, área de desenvolvimento 3, Vaga DF +2", () => {
+  assert.deepStrictEqual({ ...PESOS }, { iaAplicada: 5, termoDaStack: 2, nivelExplicito: 1, areaDesenvolvimento: 3, vagaDF: 2 });
 });
 
 test("IA aplicada pontua mais que um termo da stack", () => {
