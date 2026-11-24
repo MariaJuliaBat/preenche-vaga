@@ -2,7 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const { EventEmitter } = require("node:events");
-const { loginAssistido, portalDaUrl, abrirContextoPersistente, PORTAIS } = require("../../../pipeline/apply/sessao");
+const { loginAssistido, portalDaUrl, abrirContextoPersistente, acharBrave, PORTAIS } = require("../../../pipeline/apply/sessao");
 
 const CONFIG = { pastas: { sessaoNavegador: "C:/fake/output/sessao-navegador" } };
 
@@ -74,11 +74,79 @@ test("navegador real: tenta Edge, cai para Chrome, sem --no-sandbox e sem --enab
     return "ctx";
   } };
   const pasta = require("node:os").tmpdir() + "/sessao-teste-nav";
-  const ctx = await abrirContextoPersistente({ pasta, visivel: true, env: {}, chromium });
+  const ctx = await abrirContextoPersistente({ pasta, visivel: true, env: {}, chromium, existe: () => false });
   assert.strictEqual(ctx, "ctx");
   assert.deepStrictEqual(chamadas.map((c) => c.channel), ["msedge", "chrome"]);
   for (const c of chamadas) {
     assert.deepStrictEqual(c.ignoreDefaultArgs, ["--enable-automation"]);
     assert.ok(!(c.args || []).includes("--no-sandbox"));
   }
+});
+
+const OUTRO_BRAVE = String.raw`D:\Brave\brave.exe`;
+const CAMINHO_RUIM = String.raw`D:\X\brave.exe`;
+const BRAVE_PF = String.raw`C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe`;
+const BRAVE_LOCAL = String.raw`C:\Users\ana\AppData\Local\BraveSoftware\Brave-Browser\Application\brave.exe`;
+const ENV_WIN = { ProgramFiles: String.raw`C:\Program Files`, LOCALAPPDATA: String.raw`C:\Users\ana\AppData\Local` };
+
+test("acharBrave: Program Files, depois %LOCALAPPDATA%; fora do Windows ou sem Brave não acha", () => {
+  assert.strictEqual(acharBrave(ENV_WIN, (c) => c === BRAVE_PF, "win32"), BRAVE_PF);
+  assert.strictEqual(acharBrave(ENV_WIN, (c) => c === BRAVE_LOCAL, "win32"), BRAVE_LOCAL);
+  assert.strictEqual(acharBrave(ENV_WIN, () => true, "win32"), BRAVE_PF); // os dois existem: vale o primeiro
+  assert.strictEqual(acharBrave(ENV_WIN, () => false, "win32"), null);
+  assert.strictEqual(acharBrave(ENV_WIN, () => true, "linux"), null);
+});
+
+/** Chromium falso: guarda as opções de cada tentativa; `falham` lista o que "não está instalado". */
+function chromiumFalso(falham = []) {
+  const tentativas = [];
+  return {
+    tentativas,
+    launchPersistentContext: async (_pasta, o) => {
+      tentativas.push(o);
+      const id = o.executablePath || o.channel;
+      if (falham.includes(id)) throw new Error("Executable doesn't exist");
+      return "ctx";
+    }
+  };
+}
+const pastaTeste = () => require("node:os").tmpdir() + "/sessao-teste-brave";
+
+test("navegador: executavel do .env tem prioridade e é a única tentativa", async () => {
+  const chromium = chromiumFalso();
+  await abrirContextoPersistente({ pasta: pastaTeste(), visivel: true, executavel: OUTRO_BRAVE, env: ENV_WIN, chromium, existe: () => true, plataforma: "win32" });
+  assert.deepStrictEqual(chromium.tentativas.map((t) => t.executablePath), [OUTRO_BRAVE]);
+  assert.strictEqual(chromium.tentativas[0].channel, undefined);
+});
+
+test("navegador: BROWSER_EXECUTABLE_PATH em process.env também vale; caminho inexistente dá erro claro, sem cair para outro", async () => {
+  const chromium = chromiumFalso([CAMINHO_RUIM]);
+  await assert.rejects(
+    () => abrirContextoPersistente({ pasta: pastaTeste(), visivel: true, env: { BROWSER_EXECUTABLE_PATH: CAMINHO_RUIM }, chromium }),
+    /BROWSER_EXECUTABLE_PATH/
+  );
+  assert.strictEqual(chromium.tentativas.length, 1);
+});
+
+test("navegador: sem caminho no .env, usa o Brave instalado antes de Edge e Chrome; se o Brave falha, cai para Edge", async () => {
+  const chromium = chromiumFalso([BRAVE_PF]);
+  const ctx = await abrirContextoPersistente({ pasta: pastaTeste(), visivel: true, env: ENV_WIN, chromium, existe: (c) => c === BRAVE_PF, plataforma: "win32" });
+  assert.strictEqual(ctx, "ctx");
+  assert.deepStrictEqual(chromium.tentativas.map((t) => t.executablePath || t.channel), [BRAVE_PF, "msedge"]);
+});
+
+test("navegador: sem Brave instalado, tenta Edge e depois Chrome; opções sem --no-sandbox e sem --enable-automation", async () => {
+  const chromium = chromiumFalso(["msedge"]);
+  await abrirContextoPersistente({ pasta: pastaTeste(), visivel: true, env: ENV_WIN, chromium, existe: () => false, plataforma: "win32" });
+  assert.deepStrictEqual(chromium.tentativas.map((t) => t.executablePath || t.channel), ["msedge", "chrome"]);
+  for (const t of chromium.tentativas) {
+    assert.deepStrictEqual(t.ignoreDefaultArgs, ["--enable-automation"]);
+    assert.ok(!(t.args || []).includes("--no-sandbox"));
+  }
+});
+
+test("loginAssistido repassa o executavel do config à abertura", async () => {
+  const f = navegadorFalso();
+  await loginAssistido({ config: { ...CONFIG, navegador: { executavel: OUTRO_BRAVE } }, saida: () => {}, abrir: f.abrir });
+  assert.deepStrictEqual(f.aberturas, [{ pasta: CONFIG.pastas.sessaoNavegador, visivel: true, executavel: OUTRO_BRAVE }]);
 });

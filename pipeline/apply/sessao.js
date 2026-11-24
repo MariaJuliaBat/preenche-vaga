@@ -1,6 +1,7 @@
 // Sessão persistente (A1 a A6): perfil do navegador em output/sessao-navegador/, para o login feito uma vez valer nas
 // execuções automáticas. O Pipeline abre a janela; a Candidata faz o login. Senha nunca passa por aqui (A2).
 const fs = require("node:fs");
+const path = require("node:path");
 
 /** Portais com login assistido e domínio permitido na candidatura. LinkedIn fica de fora (risco para a conta). O Trampos saiu da lista padrão. */
 const PORTAIS = Object.freeze({
@@ -27,15 +28,33 @@ const JA_ABERTO = /ProcessSingleton|already in use|SingletonLock|profile.*(in us
 const SEM_NAVEGADOR = /Executable doesn't exist|not found|is not installed|distribution/i;
 
 /**
- * Abre o Edge ou o Chrome REAIS do sistema com a Sessão (o Chromium de teste é bloqueado pelo login da Gupy).
- * Sem --no-sandbox e sem --enable-automation. PDF_BROWSER_PATH tem prioridade (como no gerador de PDF).
- * @param {{ pasta: string, visivel: boolean, env?: Record<string, string | undefined>, chromium?: any }} opcoes
+ * Brave nos caminhos padrão do Windows, se estiver instalado.
+ * @param {Record<string, string | undefined>} env @param {(caminho: string) => boolean} existe @param {string} plataforma
  */
-async function abrirContextoPersistente({ pasta, visivel, env = process.env, chromium = require("playwright-core").chromium }) {
+function acharBrave(env = process.env, existe = fs.existsSync, plataforma = process.platform) {
+  if (plataforma !== "win32") return null;
+  const candidatos = [
+    path.win32.join(env.ProgramFiles || "C:\\Program Files", "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+    env.LOCALAPPDATA && path.win32.join(env.LOCALAPPDATA, "BraveSoftware", "Brave-Browser", "Application", "brave.exe")
+  ].filter(Boolean);
+  return /** @type {string[]} */ (candidatos).find((c) => existe(c)) || null;
+}
+
+/**
+ * Abre o navegador REAL do sistema com a Sessão (o Chromium de teste é bloqueado pelo login da Gupy).
+ * Ordem: BROWSER_EXECUTABLE_PATH (ou PDF_BROWSER_PATH) → Brave instalado → Edge → Chrome.
+ * Sem --no-sandbox e sem --enable-automation.
+ * @param {{ pasta: string, visivel: boolean, executavel?: string, env?: Record<string, string | undefined>, chromium?: any, existe?: (caminho: string) => boolean, plataforma?: string }} opcoes
+ */
+async function abrirContextoPersistente({ pasta, visivel, executavel, env = process.env, chromium = require("playwright-core").chromium, existe = fs.existsSync, plataforma = process.platform }) {
   fs.mkdirSync(pasta, { recursive: true });
   const base = { headless: !visivel, viewport: visivel ? null : { width: 1280, height: 900 }, acceptDownloads: false, ignoreDefaultArgs: ["--enable-automation"] };
   /** @type {Record<string, any>[]} */
-  const tentativas = env.PDF_BROWSER_PATH ? [{ executablePath: env.PDF_BROWSER_PATH }] : [{ channel: "msedge" }, { channel: "chrome" }];
+  const escolhido = executavel || env.BROWSER_EXECUTABLE_PATH || env.PDF_BROWSER_PATH; // executavel vem do .env (config); process.env é o plano B
+  const brave = escolhido ? null : acharBrave(env, existe, plataforma);
+  const tentativas = escolhido
+    ? [{ executablePath: escolhido }]
+    : [...(brave ? [{ executablePath: brave }] : []), { channel: "msedge" }, { channel: "chrome" }];
   /** @type {unknown} */
   let ultimo = null;
   for (const t of tentativas) {
@@ -48,19 +67,20 @@ async function abrirContextoPersistente({ pasta, visivel, env = process.env, chr
       ultimo = erro;
     }
   }
-  throw new Error(`Não achei Chrome nem Edge (defina PDF_BROWSER_PATH). ${ultimo instanceof Error ? ultimo.message.split("\n")[0] : ""}`);
+  throw new Error(`Não achei Brave, Edge nem Chrome (defina BROWSER_EXECUTABLE_PATH no .env com o caminho do executável). ${ultimo instanceof Error ? ultimo.message.split("\n")[0] : ""}`);
 }
 
 /**
  * Login Assistido (A1): janela visível; a Candidata entra à mão e fecha a janela.
- * @param {{ config: any, portal?: string | null, saida?: (t: string) => void, abrir?: (o: { pasta: string, visivel: boolean }) => Promise<any> }} args
+ * @param {{ config: any, portal?: string | null, saida?: (t: string) => void, abrir?: (o: { pasta: string, visivel: boolean, executavel?: string }) => Promise<any> }} args
  */
 async function loginAssistido({ config, portal = null, saida = console.log, abrir = abrirContextoPersistente }) {
   if (portal && !portalConhecido(portal)) {
     throw new Error(`Portal desconhecido "${portal}". Use ${Object.keys(PORTAIS).join(" ou ")}, ou --login sem argumento para uma janela em branco.`);
   }
   const alvo = portal ? PORTAIS[/** @type {keyof typeof PORTAIS} */ (portal)] : null;
-  const contexto = await abrir({ pasta: config.pastas.sessaoNavegador, visivel: true });
+  const executavel = config.navegador?.executavel;
+  const contexto = await abrir({ pasta: config.pastas.sessaoNavegador, visivel: true, ...(executavel ? { executavel } : {}) });
   const fechou = new Promise((resolve) => contexto.on("close", resolve));
   const pagina = contexto.pages()[0] || await contexto.newPage();
   if (alvo) await pagina.goto(alvo.login).catch(() => {});
@@ -69,4 +89,4 @@ async function loginAssistido({ config, portal = null, saida = console.log, abri
   saida("Sessão salva.");
 }
 
-module.exports = { PORTAIS, portalConhecido, portalDaUrl, abrirContextoPersistente, loginAssistido };
+module.exports = { PORTAIS, portalConhecido, portalDaUrl, acharBrave, abrirContextoPersistente, loginAssistido };

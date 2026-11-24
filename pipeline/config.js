@@ -133,6 +133,8 @@ function montarConfig(env, opcoes = {}) {
       // Provisório até o Perfil (P18) existir: a stack vem do .env, que fica fora do Git.
       stack: lerLista(env.RADAR_STACK)
     },
+    // Navegador da Sessão (login e candidatura): caminho do executável Chromium (ex.: Brave). Vazio: Brave instalado, Edge ou Chrome.
+    navegador: { executavel: env.BROWSER_EXECUTABLE_PATH || "" },
     pastas: {
       saida,
       curriculos: path.join(saida, "cvs"),
