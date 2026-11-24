@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { abrirNavegador } = require("../navegador");
+const { dataJaPassou } = require("../perfil/datas");
 
 /** @param {unknown} texto */
 const esc = (texto) => String(texto ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -54,8 +55,7 @@ p { margin: 0; }
 .linha { break-inside: avoid; }
 .cargo { font-weight: 700; color: #111827; }
 .org { color: #4b5563; }
-.data { white-space: nowrap; color: #4b5563; font-size: 9pt; }
-.data::before { content: "  |  "; color: #9ca3af; white-space: pre; }
+.data { color: #4b5563; }
 /* O marcador nativo do <li> é desenhado como forma vetorial e some na extração de texto; o "•" abaixo é texto de verdade. */
 ul { margin: 2px 0 0; padding: 0; list-style: none; }
 li { margin: 0 0 1.5px; padding-left: 13px; text-indent: -10px; }
@@ -105,7 +105,7 @@ function htmlDoCv(cv, nivel = 0) {
     const cargo = `<span class="cargo">${esc(item.titulo || "")}</span>`;
     // Em projetos, "organização" é a stack; fica em cinza depois do nome, separada por travessão.
     const org = item.organizacao ? ` <span class="org">— ${esc(item.organizacao)}</span>` : "";
-    const data = item.periodo ? ` <span class="data">${esc(item.periodo)}</span>` : "";
+    const data = item.periodo ? ` | <span class="data">${esc(item.periodo).replace(/ /g, "&nbsp;")}</span>` : "";
     const lista = topicos.length ? `<ul>${topicos.map((/** @type {string} */ t) => `<li>${esc(t)}</li>`).join("")}</ul>` : "";
     const links = (item.links || []).length
       ? `<p class="links">${item.links.map((/** @type {any} */ l) => `<span>${esc(l.rotulo)}: ${linkHtml(l.url, 60)}</span>`).join("")}</p>`
@@ -120,8 +120,9 @@ function htmlDoCv(cv, nivel = 0) {
     for (const f of cv.formacao) {
       const curso = juntar([f.grau, f.curso], " em ");
       const instituicao = juntar([f.instituicao, f.sigla && `(${f.sigla})`], " ");
-      const data = f.previsaoConclusao ? `previsão ${f.previsaoConclusao}` : f.status;
-      h.push(`<div class="item compacto"><div class="linha"><span class="cargo">${esc(curso || f.instituicao || "")}</span>${curso && instituicao ? ` <span class="org">— ${esc(instituicao)}</span>` : ""}${data ? ` <span class="data">${esc(data)}</span>` : ""}</div></div>`);
+      // "previsão" só para data que ainda não passou; data passada aparece como está no Doc (ex.: "Jul/2025").
+      const data = f.previsaoConclusao ? (dataJaPassou(f.previsaoConclusao) ? f.previsaoConclusao : `previsão ${f.previsaoConclusao}`) : f.status;
+      h.push(`<div class="item compacto"><div class="linha"><span class="cargo">${esc(curso || f.instituicao || "")}</span>${curso && instituicao ? ` <span class="org">— ${esc(instituicao)}</span>` : ""}${data ? ` | <span class="data">${esc(data).replace(/ /g, "&nbsp;")}</span>` : ""}</div></div>`);
     }
   }
 

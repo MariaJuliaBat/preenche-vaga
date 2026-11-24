@@ -10,6 +10,31 @@ const TERMOS_DF = ["brasilia", "distrito federal", "df", ...REGIOES_DF.map(norma
 // Na descrição longa só vale cidade inequívoca: "Gama" ou "Guará" soltos no texto podem ser outra coisa.
 const DF_NA_DESCRICAO = /(brasilia|distrito federal|[,\-/]\s*df\b)/;
 
+// Lugares fora do DF (RD10): estado ou cidade grande no título, rótulos ou local, sem modalidade remota, descartam a vaga.
+// Termos já normalizados. Só entram nomes que quase nunca significam outra coisa ("Natal", "Santos" e "Vitória" ficam de fora).
+const ESTADOS_FORA = [
+  "acre", "alagoas", "amapa", "amazonas", "bahia", "ceara", "espirito santo", "goias", "maranhao", "mato grosso", "mato grosso do sul",
+  "minas gerais", "para", "paraiba", "parana", "pernambuco", "piaui", "rio de janeiro", "rio grande do norte", "rio grande do sul",
+  "rondonia", "roraima", "santa catarina", "sao paulo", "sergipe", "tocantins"
+].filter((e) => e !== "para"); // "para" é preposição
+const CIDADES_FORA = [
+  "sao jose do rio preto", "sao jose dos campos", "ribeirao preto", "campinas", "sorocaba", "guarulhos", "osasco", "barueri", "santo andre", "sao bernardo do campo",
+  "belo horizonte", "uberlandia", "contagem", "juiz de fora", "niteroi", "curitiba", "londrina", "maringa", "joinville", "blumenau", "florianopolis",
+  "porto alegre", "caxias do sul", "salvador", "feira de santana", "recife", "fortaleza", "manaus", "belem", "goiania", "aparecida de goiania", "cuiaba",
+  "campo grande", "joao pessoa", "maceio", "aracaju", "teresina", "sao luis", "porto velho", "rio branco", "macapa", "boa vista", "palmas"
+];
+// Sigla do estado só vale em "Cidade, SP", "Cidade / SP" ou "(SP)"; "- GO" pode ser a linguagem Go, então traço só com as siglas que não são palavra.
+const UF_APOS_SEPARADOR = /(?:[,/(]\s*)(ac|al|ap|am|ba|ce|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to)\s*(?:[)|,/]|$)/;
+const UF_APOS_TRACO = /\S\s+-\s+(sp|rj|mg|rs|sc|ba|pe|am|mt|ms|rn|pb|ro|rr|ac|ap)\s*(?:[)|,/]|$)/;
+
+/** Primeiro lugar fora do DF citado no texto normalizado, ou null. @param {string} texto */
+function lugarForaDoDF(texto) {
+  const nome = acharTermo(texto, [...CIDADES_FORA, ...ESTADOS_FORA]);
+  if (nome) return nome;
+  const uf = UF_APOS_SEPARADOR.exec(texto) || UF_APOS_TRACO.exec(texto);
+  return uf ? uf[1].toUpperCase() : null;
+}
+
 const MODALIDADES = {
   hibrido: ["hibrido", "hibrida", "hybrid", "semipresencial"],
   presencial: ["presencial", "on-site", "onsite", "on site"],
@@ -72,6 +97,11 @@ function detectarLocal(vaga) {
       return { modalidade: "remoto", ehVagaDF: false, situacao: "fora", detalhe: "remoto restrito a outro país" };
     }
     return { modalidade: "remoto", ehVagaDF: false, situacao: "elegivel" };
+  }
+  // Sem remoto explícito: cidade ou estado de fora do DF no título, rótulos ou local descarta a vaga.
+  const lugar = df ? null : lugarForaDoDF(curto);
+  if (lugar) {
+    return { modalidade: menc.hibrido ? "hibrido" : menc.presencial ? "presencial" : null, ehVagaDF: false, situacao: "fora", detalhe: `fora do DF: ${lugar}` };
   }
   if (menc.hibrido || menc.presencial) {
     return { modalidade: menc.hibrido ? "hibrido" : "presencial", ehVagaDF: false, situacao: "fora" };

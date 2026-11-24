@@ -162,8 +162,8 @@ test("CV2: o HTML tem as seções em ordem, listas reais, datas sem quebra e nen
   assert.match(html, /<h1>Maria Exemplo<\/h1>/);
   assert.match(html, /<p class="headline">Desenvolvedora de Software Júnior \| /);
   assert.match(html, /<li>Criei telas em React para o painel interno\.<\/li>/);
-  assert.match(html, /<span class="cargo">Estagiária de Desenvolvimento<\/span> <span class="org">— Acme Exemplo<\/span>.*<span class="data">2024 - 2025<\/span>/);
-  assert.match(html, /\.data \{[^}]*white-space: nowrap/);
+  assert.match(html, /<span class="cargo">Estagiária de Desenvolvimento<\/span> <span class="org">— Acme Exemplo<\/span>.* \| <span class="data">2024&nbsp;-&nbsp;2025<\/span>/);
+  assert.ok(!/white-space:\s*nowrap|\.data::before|\.data \{[^}]*font-size/.test(html), "data é texto da mesma linha: separador | real, mesmo corpo, sem pseudo-elemento");
   assert.match(html, /<b>Back-End &amp; APIs:<\/b> Node\.js, Express/);
   assert.ok(!/<table|<img|<svg|<canvas/i.test(html));
   assert.match(textoDoHtml(html), /maria\.exemplo@exemplo\.com\s+\(61\) 99999-0000\s+Brasília - DF/);
@@ -180,7 +180,7 @@ test("CV2 (extração de texto): data colada ao cargo na mesma linha; sem float,
   const linhas = [...html.matchAll(/<div class="linha">(.*?)<\/div>/g)].map((m) => m[1]);
   assert.ok(linhas.length >= 3);
   for (const l of linhas) assert.ok(!/<div/.test(l) && /class="cargo"/.test(l), l);
-  assert.ok(linhas.some((l) => /class="cargo">Estagiária de Desenvolvimento<\/span>.*class="data">2024 - 2025<\/span>/.test(l)), "data no mesmo <div> do cargo");
+  assert.ok(linhas.some((l) => /class="cargo">Estagiária de Desenvolvimento<\/span>.* \| <span class="data">2024&nbsp;-&nbsp;2025<\/span>/.test(l)), "data no mesmo <div> do cargo");
   // O marcador nativo do <li> é uma forma vetorial (some na extração): o "•" vem de texto gerado.
   assert.match(css, /ul \{[^}]*list-style: none/);
   assert.match(css, /li::before \{[^}]*content: "•"/);
@@ -478,4 +478,47 @@ test("PDF: sempre 1 página, mesmo com muita experiência e Formação inteira n
   await gerarPdf(montarConteudo({ perfil, vaga: VAGA }).cv, destino);
   assert.strictEqual(paginasDoPdf(fs.readFileSync(destino)), 1);
   fs.rmSync(destino, { force: true });
+});
+
+test("FORMAÇÃO: 'previsão' só em data futura; data passada fica sem rótulo; cada item numa linha 'Curso — Instituição | Data'", () => {
+  const perfil = clonar(PERFIL);
+  perfil.formacao = [
+    { instituicao: "Universidade de Brasília", sigla: "UnB", curso: "Computação", grau: "Licenciatura", status: null, previsaoConclusao: "Dez/2099" },
+    { instituicao: "Programadores do Amanhã", curso: "Desenvolvimento Web Full-Stack", grau: "Formação", sigla: null, status: null, previsaoConclusao: "Jul/2025" }
+  ];
+  const html = htmlDoCv(montarConteudo({ perfil, vaga: VAGA }).cv);
+  const linhas = [...html.matchAll(/<div class="linha">(.*?)<\/div>/g)].map((m) => m[1]).filter((l) => /Computação|Full-Stack/.test(l));
+  assert.strictEqual(linhas.length, 2);
+  assert.match(linhas[0], /Licenciatura em Computação.*— Universidade de Brasília \(UnB\).* \| <span class="data">previsão&nbsp;Dez\/2099<\/span>/);
+  assert.match(linhas[1], /Formação em Desenvolvimento Web Full-Stack.* \| <span class="data">Jul\/2025<\/span>/);
+  assert.ok(!/previsão&nbsp;Jul\/2025/.test(html));
+  assert.ok(!/com previsão de conclusão em Jul\/2025/.test(html));
+});
+
+test("dataJaPassou: mês/ano, número/ano e só o ano; texto ilegível conta como futuro", () => {
+  const { dataJaPassou } = require("../../pipeline/perfil/datas");
+  const hoje = new Date(2026, 10, 24);
+  assert.strictEqual(dataJaPassou("Jul/2025", hoje), true);
+  assert.strictEqual(dataJaPassou("Dez/2026", hoje), false);
+  assert.strictEqual(dataJaPassou("11/2026", hoje), false);
+  assert.strictEqual(dataJaPassou("10/2026", hoje), true);
+  assert.strictEqual(dataJaPassou("2029", hoje), false);
+  assert.strictEqual(dataJaPassou("em breve", hoje), false);
+});
+
+test("Perfil: faixa de formação que já terminou vira data simples (status), sem 'previsão'; a que não terminou continua previsão", () => {
+  const { parsearLinhaDeFormacao } = require("../../pipeline/perfil/parser");
+  const passada = parsearLinhaDeFormacao("Formação em Desenvolvimento Web Full-Stack - Programadores do Amanhã | Jul/2024 - Jul/2025");
+  assert.strictEqual(passada.previsaoConclusao, null);
+  assert.strictEqual(passada.status, "Jul/2025");
+  const futura = parsearLinhaDeFormacao("Licenciatura em Computação (UnB), 2025 - 2099, cursando");
+  assert.strictEqual(futura.previsaoConclusao, "2099");
+});
+
+test("headline e Habilidades: ponto final solto em item do Perfil não vira 'Python. Node.js'", () => {
+  const perfil = clonar(PERFIL);
+  perfil.habilidades.tecnicas = ["Python.", "Node.js", "JavaScript;"];
+  const { cv } = montarConteudo({ perfil, vaga: VAGA });
+  assert.ok(!/\w\.\s/.test(cv.headline.split(" | ")[1] || ""), cv.headline);
+  assert.ok(!cv.habilidades.some((h) => /[.;,]$/.test(h)), cv.habilidades.join(","));
 });

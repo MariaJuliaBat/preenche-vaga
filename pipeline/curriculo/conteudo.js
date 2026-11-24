@@ -1,6 +1,10 @@
 // Conteúdo do Currículo Sob Medida (CV3 a CV6, P12), 100% determinístico. Só REORDENA, AGRUPA e PRIORIZA o que já está no Perfil:
 // nenhum fato é inventado. A vaga entra apenas como lista de palavras para comparar com o Perfil (dado, nunca instrução).
 const { normalizar, acharTermo } = require("../radar/texto");
+const { dataJaPassou } = require("../perfil/datas");
+
+/** Item de lista sem pontuação solta no fim ("Python." vira "Python"; "Node.js" fica). @param {unknown} texto */
+const semPontoFinal = (texto) => String(texto ?? "").trim().replace(/[.;,:]+$/, "");
 
 const MAX_EXPERIENCIAS = 6;
 const MAX_PROJETOS = 4;
@@ -64,7 +68,7 @@ const listaEmPortugues = (itens) => (itens.length <= 1 ? itens.join("") : `${ite
 function palavrasChave(perfil, textoDaVaga) {
   const vaga = normalizar(textoDaVaga);
   const doPerfil = new Map();
-  for (const h of [...perfil.habilidades.tecnicas, ...perfil.habilidades.ferramentas, ...perfil.experiencias.flatMap((/** @type {any} */ e) => e.tecnologias)]) {
+  for (const h of [...perfil.habilidades.tecnicas, ...perfil.habilidades.ferramentas, ...perfil.experiencias.flatMap((/** @type {any} */ e) => e.tecnologias)].map(semPontoFinal)) {
     if (!doPerfil.has(normalizar(h))) doPerfil.set(normalizar(h), h);
   }
   const casadas = [...doPerfil.entries()].filter(([chave]) => grafias(chave).some((g) => cita(vaga, g))).map(([, original]) => original);
@@ -118,7 +122,7 @@ function agruparHabilidades(habilidades, foco) {
 function montarHeadline(categorias, foco, alinhadas = []) {
   const candidatas = categorias
     .filter((c) => ["Linguagens", "Back-End & APIs", "Front-End"].includes(c.rotulo))
-    .flatMap((c) => c.itens);
+    .flatMap((c) => c.itens.map(semPontoFinal));
   const principais = [...candidatas.filter((h) => alinhadas.includes(h)), ...candidatas.filter((h) => !alinhadas.includes(h) && !/^c(\+\+)?$/i.test(h))].slice(0, MAX_HABILIDADES_NA_HEADLINE); // C e C++ só entram se a vaga os pedir
   const cargo = foco.desenvolvimento
     ? foco.nivel === "estagio"
@@ -139,14 +143,15 @@ function montarResumo(perfil, destaques, melhor, foco) {
   if (f) {
     const curso = [f.grau, f.curso].filter(Boolean).join(" em ");
     const instituicao = [f.instituicao, f.sigla && `(${f.sigla})`].filter(Boolean).join(" ");
-    const cursando = Boolean(f.previsaoConclusao) || /andamento|cursando|curso|atual/i.test(f.status || "");
+    const previsaoFutura = Boolean(f.previsaoConclusao) && !dataJaPassou(f.previsaoConclusao);
+    const cursando = previsaoFutura || /andamento|cursando|curso|atual/i.test(f.status || "");
     const base = [curso, instituicao && (curso ? `na ${instituicao}`.replace(/^na (Instituto|Centro|Col[eé]gio)/, "no $1") : instituicao)].filter(Boolean).join(" ");
-    if (base) frases.push(`${cursando ? "Cursando " : ""}${base}${f.previsaoConclusao ? `, com previsão de conclusão em ${f.previsaoConclusao}` : ""}.`);
+    if (base) frases.push(`${cursando ? "Cursando " : ""}${base}${previsaoFutura ? `, com previsão de conclusão em ${f.previsaoConclusao}` : ""}.`);
   }
   const habilidades = (destaques.length > 0 ? destaques : [...perfil.habilidades.tecnicas, ...perfil.habilidades.ferramentas]).slice(0, MAX_HABILIDADES_NO_RESUMO);
   if (habilidades.length > 0) {
     const area = foco?.area && destaques.length > 0 ? ` em desenvolvimento ${foco.area.rotulo.toLowerCase()}` : "";
-    frases.push(`Foco técnico${area} com ${listaEmPortugues(habilidades)}.`);
+    frases.push(`Foco técnico${area} com ${listaEmPortugues(habilidades.map(semPontoFinal))}.`);
   }
   if (melhor?.titulo) {
     const tecnologias = melhor.tipo === "projeto" ? melhor.organizacao : null;
@@ -199,7 +204,7 @@ function montarConteudo({ perfil, vaga }) {
     });
 
   // Habilidades: as da vaga primeiro (na ordem em que o Perfil as lista), depois as demais, para o ATS ver o conjunto completo.
-  const doPerfil = [...perfil.habilidades.tecnicas, ...perfil.habilidades.ferramentas];
+  const doPerfil = [...perfil.habilidades.tecnicas, ...perfil.habilidades.ferramentas].map(semPontoFinal);
   const alinhadas = doPerfil.filter((h) => chaves.includes(normalizar(h)));
   const ordemDeHabilidades = [...alinhadas, ...doPerfil.filter((h) => !alinhadas.includes(h))];
   const categorias = agruparHabilidades(ordemDeHabilidades, foco);

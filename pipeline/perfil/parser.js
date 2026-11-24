@@ -3,6 +3,7 @@
 const { normalizar, acharTermo } = require("../radar/texto");
 const { REGIOES_DF } = require("../radar/locais");
 const { extrairDeterministico } = require("./regras");
+const { dataJaPassou } = require("./datas");
 
 const TITULOS_DE_SECAO = {
   formacao: ["formacao", "formacao academica", "educacao", "escolaridade", "academico", "formacao e cursos"],
@@ -171,8 +172,10 @@ function lerLinhaDeFormacao(linha) {
   }
   const { periodo, resto, fim } = tirarPeriodo(texto);
   if (periodo && fim) {
-    // "Jul/2025 – Atual" = em andamento (texto do próprio Doc); "2025 - 2029" = previsão de término.
+    // "Jul/2025 – Atual" = em andamento (texto do próprio Doc); "2025 - 2029" = previsão de término só se a data ainda não passou:
+    // fim no passado é formação concluída e fica como data simples (sem rótulo "previsão", que o Doc não escreveu).
     if (/atual|presente|hoje|andamento|cursando/i.test(fim)) f.status = f.status || fim;
+    else if (dataJaPassou(fim)) f.status = f.status || fim;
     else if (!f.previsaoConclusao) f.previsaoConclusao = fim;
   }
   texto = resto;
