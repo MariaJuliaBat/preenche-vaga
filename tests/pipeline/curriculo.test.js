@@ -161,12 +161,12 @@ test("CV2: o HTML tem as seções em ordem, listas reais, datas sem quebra e nen
   assert.deepStrictEqual([...html.matchAll(/<h2>(.*?)<\/h2>/g)].map((m) => m[1]), ["Resumo", "Experiência", "Projetos", "Formação", "Habilidades", "Idiomas"]);
   assert.match(html, /<h1>Maria Exemplo<\/h1>/);
   assert.match(html, /<p class="headline">Desenvolvedora de Software Júnior \| /);
-  assert.match(html, /<li>Criei telas em React para o painel interno\.<\/li>/);
+  assert.match(html, /<li>• Criei telas em React para o painel interno\.<\/li>/);
   assert.match(html, /<span class="cargo">Estagiária de Desenvolvimento<\/span> <span class="org">— Acme Exemplo<\/span>.* \| <span class="data">2024&nbsp;-&nbsp;2025<\/span>/);
   assert.ok(!/white-space:\s*nowrap|\.data::before|\.data \{[^}]*font-size/.test(html), "data é texto da mesma linha: separador | real, mesmo corpo, sem pseudo-elemento");
   assert.match(html, /<b>Back-End &amp; APIs:<\/b> Node\.js, Express/);
   assert.ok(!/<table|<img|<svg|<canvas/i.test(html));
-  assert.match(textoDoHtml(html), /maria\.exemplo@exemplo\.com\s+\(61\) 99999-0000\s+Brasília - DF/);
+  assert.match(textoDoHtml(html), /maria\.exemplo@exemplo\.com\s+|\s+\(61\) 99999-0000\s+|\s+Brasília - DF/);
 });
 
 test("CV2 (extração de texto): data colada ao cargo na mesma linha; sem float, posição, grid, flex ou tabela; bullet é texto; URL sem espaço", () => {
@@ -183,7 +183,8 @@ test("CV2 (extração de texto): data colada ao cargo na mesma linha; sem float,
   assert.ok(linhas.some((l) => /class="cargo">Estagiária de Desenvolvimento<\/span>.* \| <span class="data">2024&nbsp;-&nbsp;2025<\/span>/.test(l)), "data no mesmo <div> do cargo");
   // O marcador nativo do <li> é uma forma vetorial (some na extração): o "•" vem de texto gerado.
   assert.match(css, /ul \{[^}]*list-style: none/);
-  assert.match(css, /li::before \{[^}]*content: "•"/);
+  assert.ok(!/::before|::after|content:/.test(css), "nada de conteúdo gerado por CSS: o extrator só vê o DOM");
+  assert.match(html, /<li>• /);
   // URL: espaços internos removidos, no texto e no href.
   assert.match(html, /href="https:\/\/github\.com\/ana-exemplo\/MiniProjeto-M4-API">github\.com\/ana-exemplo\/MiniProjeto-M4-API<\/a>/);
   assert.ok(!/Mini Projeto/.test(html));
@@ -458,10 +459,10 @@ test("descrição: cache do Radar primeiro; depois a issue do GitHub; sem nada, 
 });
 
 test("headline: vaga sem foco de desenvolvimento ganha título padrão antes das tecnologias", () => {
-  const estagio = montarConteudo({ perfil: PERFIL, vaga: { titulo: "Estágio em Infraestrutura de TI", descricao: "" } }).cv.headline;
+  const estagio = montarConteudo({ perfil: PERFIL, vaga: { titulo: "Estágio em TI", descricao: "" } }).cv.headline;
   assert.match(estagio, /^Estagiária de TI \| /);
   assert.ok(!/\.\s/.test(estagio.split(" | ")[1] || ""));
-  const junior = montarConteudo({ perfil: PERFIL, vaga: { titulo: "Analista de Suporte Júnior", descricao: "" } }).cv.headline;
+  const junior = montarConteudo({ perfil: PERFIL, vaga: { titulo: "Analista de Qualidade Júnior", descricao: "" } }).cv.headline;
   assert.match(junior, /^Desenvolvedora de Software Júnior \| /);
 });
 
@@ -534,4 +535,39 @@ test("seções: cada título abre uma <section> isolada e o espaço acima do tí
     assert.ok(Number(/h2 \{ break-after: avoid; margin: (\d+)px/.exec(css)[1]) >= 7, `nível ${nivel}`);
   }
   assert.match(html, /<p class="headline">[^<]* \| [^<]*( • [^<]*)+<\/p>/);
+});
+
+test("vaga sem descrição: o título muda headline, frase de foco do Resumo e Habilidades (nada de PDFs idênticos)", () => {
+  const cv = (titulo) => montarConteudo({ perfil: PERFIL, vaga: { titulo, descricao: "" } }).cv;
+  const back = cv("Desenvolvedor Back-End Júnior");
+  const full = cv("Desenvolvedor Full-Stack Júnior");
+  const infra = cv("Estágio em Infraestrutura de TI");
+  const dados = cv("Analista de Dados Júnior");
+  const programador = cv("Analista Programador Júnior");
+  assert.match(back.headline, /^Desenvolvedora Back-End Júnior \| /);
+  assert.match(full.headline, /^Desenvolvedora Full-Stack Júnior \| /);
+  assert.match(infra.headline, /^Estágio em Infraestrutura e Redes \| /);
+  assert.match(dados.headline, /^Analista de Dados e IA Júnior \| /);
+  assert.match(programador.headline, /^Programadora Júnior \| /);
+  assert.match(back.resumo, /Foco técnico em desenvolvimento back-end/);
+  assert.match(full.resumo, /Foco técnico em desenvolvimento full-stack/);
+  assert.match(infra.resumo, /Foco técnico em infraestrutura e redes/);
+  assert.match(dados.resumo, /Foco técnico em dados e IA/);
+  const resumos = new Set([back, full, infra, dados, programador].map((c) => c.resumo));
+  assert.ok(resumos.size >= 4, "resumos diferentes");
+  // Só reordena o Perfil: nenhuma habilidade nova.
+  const doPerfil = new Set([...PERFIL.habilidades.tecnicas, ...PERFIL.habilidades.ferramentas]);
+  for (const c of [infra, dados]) for (const h of c.habilidades) assert.ok(doPerfil.has(h), h);
+});
+
+test("itens de EXPERIÊNCIA, PROJETOS e FORMAÇÃO: bloco vertical simples; cada link na sua linha; bullet e separadores são texto", () => {
+  const perfil = clonar(PERFIL);
+  perfil.experiencias[1].links = [{ rotulo: "Repositório", url: "https://github.com/ana-exemplo/a" }, { rotulo: "Notícia", url: "https://exemplo.com/n" }];
+  const html = htmlDoCv(montarConteudo({ perfil, vaga: VAGA }).cv);
+  const links = [...html.matchAll(/<p class="link">(.*?)<\/p>/g)].map((m) => m[1]);
+  assert.strictEqual(links.length, 2);
+  assert.match(links[0], /^Repositório: /);
+  assert.match(links[1], /^Notícia: /);
+  assert.ok(!/<span class="links"|class="links"/.test(html));
+  assert.ok(!/inline-block|display\s*:\s*(flex|grid|table|inline)|float\s*:/.test(html));
 });

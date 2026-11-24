@@ -44,7 +44,6 @@ a { color: inherit; text-decoration: none; overflow-wrap: anywhere; }
 h1 { margin: 0; font-size: 19pt; line-height: 1.15; letter-spacing: 0.2px; color: #111827; }
 .headline { margin: 2px 0 0; font-size: 10.5pt; font-weight: 600; color: #374151; }
 .contato { margin: 5px 0 0; color: #374151; font-size: 9pt; }
-.contato span + span::before { content: "  |  "; color: #9ca3af; white-space: pre; }
 .portfolio { margin: 1px 0 0; font-size: 9pt; color: #374151; }
 /* Cada seção é um bloco isolado: o título nunca divide a linha com o último item da seção anterior, e o espaço acima dele não encolhe na compactação. */
 .secao { display: block; clear: both; }
@@ -58,12 +57,10 @@ p { margin: 0; }
 .cargo { font-weight: 700; color: #111827; }
 .org { color: #4b5563; }
 .data { color: #4b5563; }
-/* O marcador nativo do <li> é desenhado como forma vetorial e some na extração de texto; o "•" abaixo é texto de verdade. */
+/* O marcador nativo do <li> é desenhado como forma vetorial e conteúdo gerado por CSS não está no DOM: o "•" é texto de verdade dentro do <li>. */
 ul { margin: 2px 0 0; padding: 0; list-style: none; }
-li { margin: 0 0 1.5px; padding-left: 13px; text-indent: -10px; }
-li::before { content: "•"; display: inline-block; width: 10px; text-indent: 0; }
-.links { margin: 2px 0 0; font-size: 9pt; color: #4b5563; }
-.links span + span::before { content: "  |  "; color: #9ca3af; white-space: pre; }
+li { margin: 0 0 1.5px; padding-left: 0.7em; text-indent: -0.7em; }
+.link { margin: 2px 0 0; font-size: 9pt; color: #4b5563; }
 .habilidades p { margin: 0 0 1.5px; }
 .habilidades b { color: #111827; }
 `;
@@ -109,7 +106,7 @@ function htmlDoCv(cv, nivel = 0) {
     id.linkedin && linkHtml(id.linkedin),
     id.github && linkHtml(id.github)
   ].filter(Boolean);
-  if (contatos.length) h.push(`<p class="contato">${contatos.map((c) => `<span>${c}</span>`).join("")}</p>`);
+  if (contatos.length) h.push(`<p class="contato">${contatos.join(" | ")}</p>`);
 
   const jaNosItens = new Set([...cv.experiencias, ...cv.projetos].flatMap((/** @type {any} */ b) => (b.item.links || []).map((/** @type {any} */ l) => semProtocolo(l.url))));
   if (id.portfolio && !jaNosItens.has(semProtocolo(id.portfolio))) {
@@ -125,9 +122,9 @@ function htmlDoCv(cv, nivel = 0) {
     // Em projetos, "organização" é a stack; fica em cinza depois do nome, separada por travessão.
     const org = item.organizacao ? ` <span class="org">— ${esc(item.organizacao)}</span>` : "";
     const data = item.periodo ? ` | <span class="data">${esc(item.periodo).replace(/ /g, "&nbsp;")}</span>` : "";
-    const lista = topicos.length ? `<ul>${topicos.map((/** @type {string} */ t) => `<li>${esc(t)}</li>`).join("")}</ul>` : "";
+    const lista = topicos.length ? `<ul>${topicos.map((/** @type {string} */ t) => `<li>• ${esc(t)}</li>`).join("")}</ul>` : "";
     const links = (item.links || []).length
-      ? `<p class="links">${item.links.map((/** @type {any} */ l) => `<span>${esc(l.rotulo)}: ${linkHtml(l.url, 60)}</span>`).join("")}</p>`
+      ? item.links.map((/** @type {any} */ l) => `<p class="link">${esc(l.rotulo)}: ${linkHtml(l.url, 60)}</p>`).join("")
       : "";
     return `<div class="item${bloco.resumida ? " compacto" : ""}"><div class="linha">${cargo}${org}${data}</div>${lista}${links}</div>`;
   };
