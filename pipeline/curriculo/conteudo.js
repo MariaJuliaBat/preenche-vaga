@@ -124,7 +124,7 @@ function montarHeadline(categorias, foco, alinhadas = []) {
     ? foco.nivel === "estagio"
       ? `Estágio em Desenvolvimento${foco.area ? ` ${foco.area.rotulo}` : " de Software"}`
       : `Desenvolvedora ${foco.area ? foco.area.rotulo : "de Software"}${foco.nivel === "junior" ? " Júnior" : ""}`
-    : null;
+    : foco.nivel === "junior" ? "Desenvolvedora de Software Júnior" : "Estagiária de TI"; // vaga sem foco de desenvolvimento: título padrão, nunca só as tecnologias
   return [cargo, principais.join(" • ")].filter(Boolean).join(" | ") || null;
 }
 

@@ -456,3 +456,26 @@ test("descrição: cache do Radar primeiro; depois a issue do GitHub; sem nada, 
   assert.strictEqual(await obterDescricaoDaVaga({ url: "https://github.com/org/vagas/issues/13", config, fetchImpl: async () => ({ ok: false }) }), null);
   assert.strictEqual(await obterDescricaoDaVaga({ url: "https://github.com/org/vagas/issues/14", config, fetchImpl: async () => { throw new Error("sem rede"); } }), null);
 });
+
+test("headline: vaga sem foco de desenvolvimento ganha título padrão antes das tecnologias", () => {
+  const estagio = montarConteudo({ perfil: PERFIL, vaga: { titulo: "Estágio em Infraestrutura de TI", descricao: "" } }).cv.headline;
+  assert.match(estagio, /^Estagiária de TI \| /);
+  assert.ok(!/\.\s/.test(estagio.split(" | ")[1] || ""));
+  const junior = montarConteudo({ perfil: PERFIL, vaga: { titulo: "Analista de Suporte Júnior", descricao: "" } }).cv.headline;
+  assert.match(junior, /^Desenvolvedora de Software Júnior \| /);
+});
+
+test("PDF: sempre 1 página, mesmo com muita experiência e Formação inteira na mesma página", async (t) => {
+  if (!(await navegadorDisponivel())) return t.skip("sem Chrome/Edge");
+  const perfil = clonar(PERFIL);
+  perfil.formacao.push({ instituicao: "Centro de Ensino Médio 01 de Exemplo", curso: null, grau: null, sigla: null, status: "cursando", previsaoConclusao: "Jul/2025" });
+  perfil.experiencias = Array.from({ length: 9 }, (_, i) => ({
+    tipo: i < 5 ? "experiencia" : "projeto", titulo: `Cargo ${i}`, organizacao: `Empresa ${i}`, periodo: "2024 - 2025", links: [], tecnologias: ["Python"],
+    descricao: ["Primeiro ponto com texto longo o bastante para ocupar a linha inteira do documento", "Segundo ponto com entrega", "Terceiro ponto", "Quarto ponto"]
+  }));
+  const destino = path.join(os.tmpdir(), `cv-1pagina-${process.pid}.pdf`);
+  const { paginasDoPdf } = require("../../pipeline/curriculo/pdf");
+  await gerarPdf(montarConteudo({ perfil, vaga: VAGA }).cv, destino);
+  assert.strictEqual(paginasDoPdf(fs.readFileSync(destino)), 1);
+  fs.rmSync(destino, { force: true });
+});

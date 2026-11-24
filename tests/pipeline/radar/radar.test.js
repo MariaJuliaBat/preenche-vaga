@@ -245,3 +245,24 @@ test("GitHub: erro 403 sugere GITHUB_TOKEN", async () => {
   const [conector] = criarConectoresGithub({ repos: ["org/vagas"], fetchImpl });
   await assert.rejects(conector.buscar({ foco: "geral" }), /403.*GITHUB_TOKEN/);
 });
+
+test("mesma vaga de fontes diferentes: 'Grupo Ignição Digital' e 'Ignição Digital S.A.' com o mesmo título viram uma só", async () => {
+  const titulo = "Estágio em Infraestrutura de TI";
+  const a = vagaDF({ titulo, empresa: "Grupo Ignição Digital", url: "https://fonte-a.exemplo/1" });
+  const b = vagaDF({ titulo, empresa: "Ignição Digital", url: "https://fonte-b.exemplo/9" });
+  const c = vagaDF({ titulo, empresa: "Place Tecnologia Ltda", url: "https://fonte-a.exemplo/2" });
+  const d = vagaDF({ titulo, empresa: "Place Tecnologia", url: "https://fonte-b.exemplo/3" });
+  const outra = vagaDF({ titulo: "Estágio em Suporte de TI", empresa: "Ignição Digital", url: "https://fonte-b.exemplo/4" });
+  const r = await rodar([conectorFalso("A", { geral: [a, c, outra], df: [b, d] })]);
+  const urls = r.lote.map((v) => v.vaga.url);
+  assert.ok(urls.includes(a.url) && urls.includes(c.url) && urls.includes(outra.url));
+  assert.ok(!urls.includes(b.url) && !urls.includes(d.url));
+});
+
+test("empresaNormalizada: tira Grupo, S.A., Ltda e acento; vaga sem empresa não gera chave", () => {
+  const { empresaNormalizada, chaveEmpresaTitulo } = require("../../../pipeline/radar/texto");
+  assert.strictEqual(empresaNormalizada("Grupo Ignição Digital"), "ignicao digital");
+  assert.strictEqual(empresaNormalizada("Ignição Digital S.A."), "ignicao digital");
+  assert.strictEqual(empresaNormalizada("Place Tecnologia Ltda."), "place tecnologia");
+  assert.strictEqual(chaveEmpresaTitulo({ titulo: "Dev" }), "");
+});

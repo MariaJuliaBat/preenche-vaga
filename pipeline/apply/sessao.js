@@ -4,7 +4,7 @@ const fs = require("node:fs");
 
 /** Portais com login assistido e domínio permitido na candidatura. LinkedIn fica de fora (risco para a conta). O Trampos saiu da lista padrão. */
 const PORTAIS = Object.freeze({
-  gupy: { nome: "Gupy", dominios: ["gupy.io"], login: "https://login.gupy.io/candidates/signin" },
+  gupy: { nome: "Gupy", dominios: ["gupy.io"], login: "https://portal.gupy.io" },
   indeed: { nome: "Indeed", dominios: ["indeed.com"], login: "https://secure.indeed.com/auth" },
   infojobs: { nome: "InfoJobs", dominios: ["infojobs.com.br"], login: "https://login.infojobs.com.br/Candidate" }
 });
@@ -27,15 +27,15 @@ const JA_ABERTO = /ProcessSingleton|already in use|SingletonLock|profile.*(in us
 const SEM_NAVEGADOR = /Executable doesn't exist|not found|is not installed|distribution/i;
 
 /**
- * Abre o Chrome ou o Edge com a Sessão. PDF_BROWSER_PATH tem prioridade (como no gerador de PDF).
- * @param {{ pasta: string, visivel: boolean, env?: Record<string, string | undefined> }} opcoes
+ * Abre o Edge ou o Chrome REAIS do sistema com a Sessão (o Chromium de teste é bloqueado pelo login da Gupy).
+ * Sem --no-sandbox e sem --enable-automation. PDF_BROWSER_PATH tem prioridade (como no gerador de PDF).
+ * @param {{ pasta: string, visivel: boolean, env?: Record<string, string | undefined>, chromium?: any }} opcoes
  */
-async function abrirContextoPersistente({ pasta, visivel, env = process.env }) {
-  const { chromium } = require("playwright-core");
+async function abrirContextoPersistente({ pasta, visivel, env = process.env, chromium = require("playwright-core").chromium }) {
   fs.mkdirSync(pasta, { recursive: true });
-  const base = { headless: !visivel, viewport: visivel ? null : { width: 1280, height: 900 }, acceptDownloads: false };
+  const base = { headless: !visivel, viewport: visivel ? null : { width: 1280, height: 900 }, acceptDownloads: false, ignoreDefaultArgs: ["--enable-automation"] };
   /** @type {Record<string, any>[]} */
-  const tentativas = env.PDF_BROWSER_PATH ? [{ executablePath: env.PDF_BROWSER_PATH }] : [{ channel: "chrome" }, { channel: "msedge" }];
+  const tentativas = env.PDF_BROWSER_PATH ? [{ executablePath: env.PDF_BROWSER_PATH }] : [{ channel: "msedge" }, { channel: "chrome" }];
   /** @type {unknown} */
   let ultimo = null;
   for (const t of tentativas) {
