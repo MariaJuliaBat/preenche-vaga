@@ -52,7 +52,7 @@ function criarEtapaCandidatura(deps = {}) {
     const dominiosDosPortais = Object.values(PORTAIS).flatMap((p) => p.dominios);
     const candidatar = deps.candidatar || candidatarNaPagina;
     const visivel = !config.apply.headless;
-    const contexto = await (deps.abrir || abrirContextoPersistente)({ pasta: config.pastas.sessaoNavegador, visivel });
+    const contexto = await (deps.abrir || abrirContextoPersistente)({ pasta: config.pastas.sessaoNavegador, visivel, ...(config.navegador?.executavel ? { executavel: config.navegador.executavel } : {}) });
     let abertasComPendencia = 0;
 
     try {
