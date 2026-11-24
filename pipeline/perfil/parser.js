@@ -114,6 +114,19 @@ function cabecalhoDoItem(linha) {
   return { titulo: segmentos[0] || null, organizacao: segmentos.slice(1).join(" - ") || null, periodo };
 }
 
+/**
+ * Linha que na verdade é o cabeçalho de um item (mesmo com marcador ou passando de 110 caracteres): "Título | tecnologia, tecnologia", curta, sem frase, e seguida de um tópico.
+ * @param {string} linha @param {string} proxima próxima linha não vazia
+ */
+function pareceCabecalhoDeItem(linha, proxima) {
+  const texto = semMarcador(linha);
+  const partes = texto.split(/\s+\|\s+/);
+  if (partes.length !== 2 || !BULLET.test(proxima)) return false;
+  const [titulo, resto] = partes;
+  if (titulo.length < 2 || titulo.length > 60 || /[.!?:;]/.test(titulo)) return false;
+  return !/[.!?]$/.test(texto) && resto.split(",").length >= 2 && !lerLinkRotulado(linha);
+}
+
 /** @param {string[]} linhas @param {"experiencia" | "projeto"} tipo */
 function parsearItens(linhas, tipo) {
   /** @type {{ tipo: "experiencia" | "projeto", titulo: string | null, organizacao: string | null, periodo: string | null, descricao: string[], tecnologias: string[], links: { rotulo: string, url: string }[] }[]} */
@@ -121,13 +134,19 @@ function parsearItens(linhas, tipo) {
   /** @type {typeof itens[number] | null} */
   let atual = null;
 
-  for (const bruta of linhas) {
+  for (const [indice, bruta] of linhas.entries()) {
     const linha = bruta.trim();
     if (!linha) continue;
+    const proxima = linhas.slice(indice + 1).find((l) => l.trim())?.trim() || "";
     const tecnologias = /^(?:tecnologias|stack|ferramentas|tecnologias utilizadas)\s*:\s*(.+)$/i.exec(semMarcador(linha));
 
     if (tecnologias && atual) {
       atual.tecnologias.push(...dividirLista(tecnologias[1]));
+    } else if (atual && atual.descricao.length > 0 && pareceCabecalhoDeItem(linha, proxima)) {
+      // "Projeto | Node.js, Playwright" (com ou sem marcador, até longo) colado como tópico do item anterior: é o cabeçalho de um item novo.
+      const c = cabecalhoDoItem(semMarcador(linha));
+      atual = { tipo, titulo: c.titulo, organizacao: c.organizacao, periodo: c.periodo, descricao: [], tecnologias: [], links: [] };
+      itens.push(atual);
     } else if (BULLET.test(linha) && atual) {
       const link = lerLinkRotulado(linha);
       if (link) atual.links.push(link);

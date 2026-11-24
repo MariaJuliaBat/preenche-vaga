@@ -236,3 +236,26 @@ test("título desconhecido em maiúsculas encerra Idiomas/Habilidades em vez de 
   assert.deepStrictEqual(perfil.habilidades.idiomas, ["Inglês intermediário"]);
   assert.ok(!perfil.habilidades.tecnicas.includes("Disponibilidade para viagens"));
 });
+
+test("projeto com cabeçalho 'Título | tecnologias' e marcador não vira tópico do projeto anterior (nem junta os links)", () => {
+  const texto = `Maria Exemplo
+maria.exemplo@exemplo.com
+
+PROJETOS
+Robô de Conferência | Python, Playwright
+• Automação que confere as inscrições do portal.
+• Repositório: https://github.com/exemplo/robo
+Painel de Vagas | Node.js, JavaScript, Playwright, Google Gemini API, RAG, Google Sheets API, GitHub Actions (CI/CD)
+• Guarda o currículo uma vez e preenche formulários.
+• Repositório: https://github.com/exemplo/painel
+
+HABILIDADES
+Python, Node.js
+`;
+  const { perfil } = parsearPerfil(texto);
+  const projetos = perfil.experiencias.filter((e) => e.tipo === "projeto");
+  assert.deepStrictEqual(projetos.map((p) => p.titulo), ["Robô de Conferência", "Painel de Vagas"]);
+  assert.deepStrictEqual(projetos.map((p) => p.descricao.length), [1, 1]);
+  assert.deepStrictEqual(projetos.map((p) => p.links.map((l) => l.url)), [["https://github.com/exemplo/robo"], ["https://github.com/exemplo/painel"]]);
+  assert.match(projetos[1].organizacao, /^Node.js, JavaScript, Playwright, Google Gemini API/);
+});

@@ -39,7 +39,9 @@ const CATEGORIAS = [
 // Ordem das categorias conforme o foco da vaga.
 const ORDEM_POR_FOCO = {
   "front-end": ["Linguagens", "Front-End", "Back-End & APIs", "Banco de Dados", "Automação & Ferramentas"],
-  padrao: ["Linguagens", "Back-End & APIs", "Banco de Dados", "Automação & Ferramentas", "Front-End"]
+  padrao: ["Linguagens", "Back-End & APIs", "Banco de Dados", "Automação & Ferramentas", "Front-End"],
+  infra: ["Automação & Ferramentas", "Linguagens", "Banco de Dados", "Back-End & APIs", "Front-End"],
+  dados: ["Linguagens", "Banco de Dados", "Automação & Ferramentas", "Back-End & APIs", "Front-End"]
 };
 
 const AREAS = [
@@ -47,6 +49,24 @@ const AREAS = [
   { chave: "front-end", rotulo: "Front-End", termos: ["front-end", "frontend", "front end"] },
   { chave: "full-stack", rotulo: "Full-Stack", termos: ["full-stack", "fullstack", "full stack"] }
 ];
+// Áreas de TI que não são desenvolvimento: lidas só do TÍTULO da vaga (palavra inteira). Mudam a headline, a frase de foco do Resumo,
+// a ordem das categorias de Habilidades e a prioridade dos itens (boost). Nunca acrescentam fato: só reordenam o que já está no Perfil.
+const AREAS_TI = [
+  {
+    chave: "infra", rotulo: "Infraestrutura e Redes", emTexto: "infraestrutura e redes", ti: true,
+    termos: ["infraestrutura", "infra", "redes", "suporte", "service desk", "help desk", "helpdesk", "noc", "sysadmin", "administrador de redes", "analista de redes"],
+    categoriasHeadline: ["Automação & Ferramentas", "Linguagens"],
+    boost: ["suporte", "infraestrutura", "redes", "linux", "usuarios", "moodle", "manutencao", "ti"]
+  },
+  {
+    chave: "dados", rotulo: "Dados e IA", emTexto: "dados e IA", ti: true,
+    termos: ["dados", "data analyst", "data engineer", "data science", "bi", "business intelligence", "inteligencia artificial", "machine learning", "ia", "ai", "analytics"],
+    categoriasHeadline: ["Linguagens", "Banco de Dados"],
+    boost: ["dados", "planilha", "sheets", "sql", "python", "automacao", "ia", "inteligencia artificial"]
+  }
+];
+// Cargo da headline quando a vaga é de desenvolvimento mas não cita back-end, front-end nem full-stack: vem da palavra do título.
+const CARGOS_DO_TITULO = [["programador", "Programadora"], ["analista de sistemas", "Analista de Sistemas"], ["engenheir", "Engenheira de Software"]];
 const SINAIS_DE_DESENVOLVIMENTO = ["desenvolv", "developer", "dev", "programador", "engenheir", "software", "back-end", "backend", "front-end", "frontend", "full-stack", "fullstack", "full stack", "sistemas", "analista de ti", "analista de sistemas"];
 
 /** Todas as grafias equivalentes ao termo (inclui ele mesmo). @param {string} termoNormalizado */
@@ -92,10 +112,13 @@ function categoriaDe(habilidade) {
 function focoDaVaga(vaga) {
   const titulo = normalizar(vaga.titulo);
   const texto = `${titulo} ${normalizar(vaga.descricao || "")}`;
-  const area = AREAS.find((a) => a.termos.some((t) => titulo.includes(t))) || AREAS.find((a) => a.termos.some((t) => texto.includes(t))) || null;
+  const areaDev = AREAS.find((a) => a.termos.some((t) => titulo.includes(t))) || AREAS.find((a) => a.termos.some((t) => texto.includes(t))) || null;
+  const areaTi = areaDev ? null : AREAS_TI.find((a) => acharTermo(titulo, a.termos)) || null;
+  const area = areaDev || areaTi;
   const nivel = /\b(estagi|estagiari)/.test(titulo) ? "estagio" : /\b(junior|jr)\b/.test(titulo) ? "junior" : null;
-  const desenvolvimento = Boolean(area) || SINAIS_DE_DESENVOLVIMENTO.some((s) => (s.length <= 3 ? new RegExp(`\\b${s}\\b`).test(titulo) : titulo.includes(s)));
-  return { area, nivel, desenvolvimento };
+  const desenvolvimento = Boolean(areaDev) || SINAIS_DE_DESENVOLVIMENTO.some((s) => (s.length <= 3 ? new RegExp(`\\b${s}\\b`).test(titulo) : titulo.includes(s)));
+  const cargo = (CARGOS_DO_TITULO.find(([termo]) => titulo.includes(termo)) || [null, "Desenvolvedora de Software"])[1];
+  return { area, nivel, desenvolvimento, cargo };
 }
 
 /**
@@ -120,14 +143,18 @@ function agruparHabilidades(habilidades, foco) {
  * @param {any[]} categorias @param {ReturnType<typeof focoDaVaga>} foco @param {string[]} [alinhadas] habilidades que a vaga também pede (vêm primeiro)
  */
 function montarHeadline(categorias, foco, alinhadas = []) {
+  const rotulosDaHeadline = foco.area?.categoriasHeadline || ["Linguagens", "Back-End & APIs", "Front-End"];
   const candidatas = categorias
-    .filter((c) => ["Linguagens", "Back-End & APIs", "Front-End"].includes(c.rotulo))
+    .filter((c) => rotulosDaHeadline.includes(c.rotulo))
     .flatMap((c) => c.itens.map(semPontoFinal));
   const principais = [...candidatas.filter((h) => alinhadas.includes(h)), ...candidatas.filter((h) => !alinhadas.includes(h) && !/^c(\+\+)?$/i.test(h))].slice(0, MAX_HABILIDADES_NA_HEADLINE); // C e C++ só entram se a vaga os pedir
-  const cargo = foco.desenvolvimento
+  const junior = foco.nivel === "junior" ? " Júnior" : "";
+  const cargo = foco.area?.ti
+    ? foco.nivel === "estagio" ? `Estágio em ${foco.area.rotulo}` : foco.nivel === "junior" ? `Analista de ${foco.area.rotulo} Júnior` : `Profissional de ${foco.area.rotulo}`
+    : foco.desenvolvimento
     ? foco.nivel === "estagio"
       ? `Estágio em Desenvolvimento${foco.area ? ` ${foco.area.rotulo}` : " de Software"}`
-      : `Desenvolvedora ${foco.area ? foco.area.rotulo : "de Software"}${foco.nivel === "junior" ? " Júnior" : ""}`
+      : `${foco.area ? `Desenvolvedora ${foco.area.rotulo}` : foco.cargo}${junior}`
     : foco.nivel === "junior" ? "Desenvolvedora de Software Júnior" : "Estagiária de TI"; // vaga sem foco de desenvolvimento: título padrão, nunca só as tecnologias
   return [cargo, principais.join(" • ")].filter(Boolean).join(" | ") || null;
 }
@@ -136,8 +163,9 @@ function montarHeadline(categorias, foco, alinhadas = []) {
  * Resumo em parágrafo corrido, só com fatos do Perfil: formação, foco técnico alinhado à vaga e o item de maior destaque.
  * @param {any} perfil @param {string[]} destaques habilidades do Perfil alinhadas à vaga
  * @param {any | null} melhor item mais alinhado @param {ReturnType<typeof focoDaVaga>} [foco]
+ * @param {string[]} [prioritarias] habilidades da área da vaga (TI sem palavra-chave técnica), usadas quando nada bate
  */
-function montarResumo(perfil, destaques, melhor, foco) {
+function montarResumo(perfil, destaques, melhor, foco, prioritarias = []) {
   const frases = [];
   const f = perfil.formacao[0];
   if (f) {
@@ -148,9 +176,10 @@ function montarResumo(perfil, destaques, melhor, foco) {
     const base = [curso, instituicao && (curso ? `na ${instituicao}`.replace(/^na (Instituto|Centro|Col[eé]gio)/, "no $1") : instituicao)].filter(Boolean).join(" ");
     if (base) frases.push(`${cursando ? "Cursando " : ""}${base}${previsaoFutura ? `, com previsão de conclusão em ${f.previsaoConclusao}` : ""}.`);
   }
-  const habilidades = (destaques.length > 0 ? destaques : [...perfil.habilidades.tecnicas, ...perfil.habilidades.ferramentas]).slice(0, MAX_HABILIDADES_NO_RESUMO);
+  const dasAreaTi = foco?.area?.ti && prioritarias.length > 0 ? prioritarias : null;
+  const habilidades = (destaques.length > 0 ? destaques : dasAreaTi || [...perfil.habilidades.tecnicas, ...perfil.habilidades.ferramentas]).slice(0, MAX_HABILIDADES_NO_RESUMO);
   if (habilidades.length > 0) {
-    const area = foco?.area && destaques.length > 0 ? ` em desenvolvimento ${foco.area.rotulo.toLowerCase()}` : "";
+    const area = foco?.area?.ti ? ` em ${foco.area.emTexto}` : foco?.area ? ` em desenvolvimento ${foco.area.rotulo.toLowerCase()}` : ""; // a área vem do título da vaga, mesmo sem descrição
     frases.push(`Foco técnico${area} com ${listaEmPortugues(habilidades.map(semPontoFinal))}.`);
   }
   if (melhor?.titulo) {
@@ -174,7 +203,8 @@ function montarConteudo({ perfil, vaga }) {
   const chaves = casadas.map(normalizar);
   const pontos = (/** @type {string} */ texto) => {
     const t = normalizar(texto);
-    return chaves.filter((c) => grafias(c).some((g) => cita(t, g))).length;
+    const doBoost = (foco.area?.boost || []).filter((b) => cita(t, b)).length; // área de TI do título: itens dela sobem
+    return chaves.filter((c) => grafias(c).some((g) => cita(t, g))).length + doBoost;
   };
   // Item "de tecnologia": cita alguma tecnologia de software (as categorias ou os termos técnicos comuns).
   const termosDeSoftware = [...new Set([...CATEGORIAS.flatMap((c) => c.termos), ...TERMOS_TECNICOS])].filter((t) => !["api", "c", "go", "cursor", "excel", "figma"].includes(t));
@@ -225,7 +255,7 @@ function montarConteudo({ perfil, vaga }) {
     cv: {
       identificacao: perfil.identificacao,
       headline: montarHeadline(categorias, foco, alinhadas),
-      resumo: montarResumo(perfil, alinhadas, melhor, foco) || null,
+      resumo: montarResumo(perfil, alinhadas, melhor, foco, foco.area?.ti ? categorias.filter((c) => foco.area.categoriasHeadline.includes(c.rotulo)).flatMap((c) => c.itens) : []) || null,
       experiencias: experiencias.slice(0, MAX_EXPERIENCIAS),
       projetos: projetos.slice(0, MAX_PROJETOS),
       formacao: perfil.formacao,
