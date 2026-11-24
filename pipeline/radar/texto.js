@@ -25,4 +25,23 @@ function acharTermo(textoNormalizado, termos) {
   return null;
 }
 
-module.exports = { normalizar, escapar, regexDoTermo, acharTermo };
+/**
+ * Nome da empresa sem prefixo ("Grupo") e sem sufixo societário (S.A., Ltda, ME, EIRELI), para comparar "Grupo Ignição Digital" com "Ignição Digital".
+ * @param {unknown} empresa
+ */
+function empresaNormalizada(empresa) {
+  const t = normalizar(empresa).replace(/[.,/]/g, " ").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  return t
+    .replace(/^(grupo|gp)\s+/, "")
+    .replace(/(\s+(s a|sa|ltda|me|epp|eireli))+$/, "")
+    .trim();
+}
+
+/** Chave "empresa|título" da mesma vaga vinda de fontes diferentes; vazia se faltar empresa ou título. @param {{ empresa?: string, titulo?: string }} vaga */
+const chaveEmpresaTitulo = (vaga) => {
+  const empresa = empresaNormalizada(vaga.empresa);
+  const titulo = normalizar(vaga.titulo).replace(/\s+/g, " ").trim();
+  return empresa && titulo ? `${empresa}|${titulo}` : "";
+};
+
+module.exports = { empresaNormalizada, chaveEmpresaTitulo, normalizar, escapar, regexDoTermo, acharTermo };

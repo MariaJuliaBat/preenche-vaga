@@ -2,7 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const { EventEmitter } = require("node:events");
-const { loginAssistido, portalDaUrl, PORTAIS } = require("../../../pipeline/apply/sessao");
+const { loginAssistido, portalDaUrl, abrirContextoPersistente, PORTAIS } = require("../../../pipeline/apply/sessao");
 
 const CONFIG = { pastas: { sessaoNavegador: "C:/fake/output/sessao-navegador" } };
 
@@ -60,4 +60,25 @@ test("portalDaUrl: Gupy, Indeed e InfoJobs pelo domínio; o resto é formulário
 test("o login de cada Portal fica no domínio do próprio Portal", () => {
   for (const [chave, p] of Object.entries(PORTAIS)) assert.strictEqual(portalDaUrl(p.login), chave);
   assert.strictEqual(PORTAIS.infojobs.login, "https://login.infojobs.com.br/Candidate");
+});
+
+test("login da Gupy abre portal.gupy.io", () => {
+  assert.strictEqual(PORTAIS.gupy.login, "https://portal.gupy.io");
+});
+
+test("navegador real: tenta Edge, cai para Chrome, sem --no-sandbox e sem --enable-automation", async () => {
+  const chamadas = [];
+  const chromium = { launchPersistentContext: async (pasta, o) => {
+    chamadas.push(o);
+    if (o.channel === "msedge") throw new Error("Executable doesn't exist");
+    return "ctx";
+  } };
+  const pasta = require("node:os").tmpdir() + "/sessao-teste-nav";
+  const ctx = await abrirContextoPersistente({ pasta, visivel: true, env: {}, chromium });
+  assert.strictEqual(ctx, "ctx");
+  assert.deepStrictEqual(chamadas.map((c) => c.channel), ["msedge", "chrome"]);
+  for (const c of chamadas) {
+    assert.deepStrictEqual(c.ignoreDefaultArgs, ["--enable-automation"]);
+    assert.ok(!(c.args || []).includes("--no-sandbox"));
+  }
 });

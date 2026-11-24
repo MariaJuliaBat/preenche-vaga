@@ -24,19 +24,30 @@ function linkHtml(url, maximo = 48) {
   return `<a href="${esc(comProtocolo(url))}">${esc(mostrado)}</a>`;
 }
 
-const CSS = `
-@page { size: A4; margin: 12mm 14mm 11mm 14mm; }
+/** Níveis de compactação: o 0 é o layout normal; os seguintes só entram se o currículo passar de 1 página. */
+const NIVEIS = [
+  { margem: "12mm 14mm 11mm 14mm", fonte: 9.5, linha: 1.32, h2: "9px 0 3px", item: 5 },
+  { margem: "10mm 13mm 9mm 13mm", fonte: 9.2, linha: 1.26, h2: "7px 0 2px", item: 4 },
+  { margem: "8mm 12mm 8mm 12mm", fonte: 8.8, linha: 1.2, h2: "5px 0 2px", item: 3 },
+  { margem: "7mm 11mm 7mm 11mm", fonte: 8.4, linha: 1.15, h2: "4px 0 1px", item: 2 }
+];
+
+/** @param {number} [nivel] */
+const cssDoNivel = (nivel = 0) => {
+  const n = NIVEIS[Math.min(nivel, NIVEIS.length - 1)];
+  return `
+@page { size: A4; margin: ${n.margem}; }
 * { box-sizing: border-box; }
-body { margin: 0; color: #1f2933; font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 9.5pt; line-height: 1.32; }
+body { margin: 0; color: #1f2933; font-family: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: ${n.fonte}pt; line-height: ${n.linha}; }
 a { color: inherit; text-decoration: none; overflow-wrap: anywhere; }
 h1 { margin: 0; font-size: 19pt; line-height: 1.15; letter-spacing: 0.2px; color: #111827; }
 .headline { margin: 2px 0 0; font-size: 10.5pt; font-weight: 600; color: #374151; }
 .contato { margin: 5px 0 0; color: #374151; font-size: 9pt; }
 .contato span + span::before { content: "  |  "; color: #9ca3af; white-space: pre; }
 .portfolio { margin: 1px 0 0; font-size: 9pt; color: #374151; }
-h2 { margin: 9px 0 3px; padding-bottom: 2px; border-bottom: 0.75pt solid #d1d5db; font-size: 10.5pt; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #111827; }
+h2 { margin: ${n.h2}; padding-bottom: 2px; border-bottom: 0.75pt solid #d1d5db; font-size: 10.5pt; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #111827; }
 p { margin: 0; }
-.item { margin: 0 0 5px; break-inside: avoid; }
+.item { margin: 0 0 ${n.item}px; break-inside: avoid; }
 .item.compacto { margin-bottom: 3px; }
 /* Cargo, organização e período numa MESMA linha de texto (sem coluna à direita): extratores de texto e ATS que detectam colunas
    por posição não separam mais a data do cargo. */
@@ -54,13 +65,15 @@ li::before { content: "•"; display: inline-block; width: 10px; text-indent: 0;
 .habilidades p { margin: 0 0 1.5px; }
 .habilidades b { color: #111827; }
 `;
+};
 
 /**
  * HTML do currículo. Uma coluna, texto real, listas `<ul><li>` e sem tabela, imagem ou ícone.
  * @param {any} cv resultado de montarConteudo().cv
+ * @param {number} [nivel] nível de compactação (0 = normal)
  * @returns {string}
  */
-function htmlDoCv(cv) {
+function htmlDoCv(cv, nivel = 0) {
   const id = cv.identificacao;
   /** @type {string[]} */
   const h = [];
@@ -119,8 +132,11 @@ function htmlDoCv(cv) {
   }
   if (cv.idiomas.length) h.push(`<h2>Idiomas</h2>`, `<p>${esc(cv.idiomas.join(", "))}</p>`);
 
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Currículo - ${esc(id.nome || "")}</title><style>${CSS}</style></head><body>${h.join("\n")}</body></html>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Currículo - ${esc(id.nome || "")}</title><style>${cssDoNivel(nivel)}</style></head><body>${h.join("\n")}</body></html>`;
 }
+
+/** Quantidade de páginas de um PDF gerado pelo Chrome. @param {Buffer} pdf */
+const paginasDoPdf = (pdf) => (pdf.toString("latin1").match(/\/Type\s*\/Page(?![a-z])/g) || []).length;
 
 /** O PDF só pode ser gerado se houver Chrome ou Edge; os testes usam isto para pular. */
 async function navegadorDisponivel() {
@@ -142,12 +158,19 @@ async function gerarPdf(cv, destino) {
   const navegador = await abrirNavegador();
   try {
     const pagina = await navegador.newPage();
-    await pagina.setContent(htmlDoCv(cv), { waitUntil: "load" });
-    await pagina.pdf({ path: destino, format: "A4", printBackground: true, preferCSSPageSize: true });
+    // O currículo é sempre de 1 página: comprime espaçamento e fonte, nível a nível, até caber.
+    /** @type {Buffer | null} */
+    let pdf = null;
+    for (let nivel = 0; nivel < NIVEIS.length; nivel++) {
+      await pagina.setContent(htmlDoCv(cv, nivel), { waitUntil: "load" });
+      pdf = await pagina.pdf({ format: "A4", printBackground: true, preferCSSPageSize: true });
+      if (paginasDoPdf(pdf) <= 1) break;
+    }
+    fs.writeFileSync(destino, /** @type {Buffer} */ (pdf));
   } finally {
     await navegador.close();
   }
   return destino;
 }
 
-module.exports = { htmlDoCv, gerarPdf, navegadorDisponivel };
+module.exports = { paginasDoPdf, htmlDoCv, gerarPdf, navegadorDisponivel };

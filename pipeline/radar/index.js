@@ -4,6 +4,7 @@ const { normalizarUrl } = require("../sheets");
 const { classificar } = require("./classificar");
 const { pontuar } = require("./pontuar");
 const { montarLote } = require("./lote");
+const { chaveEmpresaTitulo } = require("./texto");
 
 /**
  * @typedef {object} Aprovada
@@ -68,17 +69,21 @@ async function executarRadar(opcoes) {
     const vistasNoLote = new Set();
     for (const vaga of brutas) {
       const chave = normalizarUrl(vaga.url);
+      // Mesma vaga em fontes diferentes (URLs distintas): empresa normalizada + título.
+      const chaveVaga = chaveEmpresaTitulo(vaga);
       // Já tratada na busca anterior desta execução: não conta de novo nem polui os logs.
       if (chave && jaProcessadas.has(chave)) continue;
+      if (chaveVaga && jaProcessadas.has(chaveVaga)) continue;
       const base = { titulo: vaga.titulo, url: vaga.url, fonte: vaga.fonte };
 
-      if (chave && (urlsExistentes.has(chave) || vistasNoLote.has(chave))) {
+      if (chave && (urlsExistentes.has(chave) || vistasNoLote.has(chave)) || (chaveVaga && vistasNoLote.has(chaveVaga))) {
         const entrada = { ...base, motivo: "duplicada" };
         descartes.push(entrada);
         registrar("descartes", entrada);
         continue;
       }
       if (chave) vistasNoLote.add(chave);
+      if (chaveVaga) vistasNoLote.add(chaveVaga);
 
       const c = classificar(vaga, { hoje, vigenciaDias, perfil });
       if (c.resultado === "descarte") {
