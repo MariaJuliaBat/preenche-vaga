@@ -522,3 +522,16 @@ test("headline e Habilidades: ponto final solto em item do Perfil não vira 'Pyt
   assert.ok(!/\w\.\s/.test(cv.headline.split(" | ")[1] || ""), cv.headline);
   assert.ok(!cv.habilidades.some((h) => /[.;,]$/.test(h)), cv.habilidades.join(","));
 });
+
+test("seções: cada título abre uma <section> isolada e o espaço acima do título não some na compactação", () => {
+  const html = htmlDoCv(montarConteudo({ perfil: PERFIL, vaga: VAGA }).cv);
+  const secoes = [...html.matchAll(/<section class="secao">\s*<h2>(.*?)<\/h2>/g)].map((m) => m[1]);
+  assert.deepStrictEqual(secoes, [...html.matchAll(/<h2>(.*?)<\/h2>/g)].map((m) => m[1]));
+  assert.strictEqual((html.match(/<section/g) || []).length, (html.match(/<\/section>/g) || []).length);
+  for (const nivel of [0, 1, 2, 3]) {
+    const css = /<style>([\s\S]*?)<\/style>/.exec(htmlDoCv(montarConteudo({ perfil: PERFIL, vaga: VAGA }).cv, nivel))[1];
+    assert.match(css, /\.secao \{ display: block; clear: both; \}/);
+    assert.ok(Number(/h2 \{ break-after: avoid; margin: (\d+)px/.exec(css)[1]) >= 7, `nível ${nivel}`);
+  }
+  assert.match(html, /<p class="headline">[^<]* \| [^<]*( • [^<]*)+<\/p>/);
+});

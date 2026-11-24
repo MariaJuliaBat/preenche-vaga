@@ -28,9 +28,9 @@ function linkHtml(url, maximo = 48) {
 /** Níveis de compactação: o 0 é o layout normal; os seguintes só entram se o currículo passar de 1 página. */
 const NIVEIS = [
   { margem: "12mm 14mm 11mm 14mm", fonte: 9.5, linha: 1.32, h2: "9px 0 3px", item: 5 },
-  { margem: "10mm 13mm 9mm 13mm", fonte: 9.2, linha: 1.26, h2: "7px 0 2px", item: 4 },
-  { margem: "8mm 12mm 8mm 12mm", fonte: 8.8, linha: 1.2, h2: "5px 0 2px", item: 3 },
-  { margem: "7mm 11mm 7mm 11mm", fonte: 8.4, linha: 1.15, h2: "4px 0 1px", item: 2 }
+  { margem: "10mm 13mm 9mm 13mm", fonte: 9.2, linha: 1.26, h2: "8px 0 2px", item: 4 },
+  { margem: "8mm 12mm 8mm 12mm", fonte: 8.8, linha: 1.17, h2: "8px 0 2px", item: 3 },
+  { margem: "7mm 11mm 7mm 11mm", fonte: 8.4, linha: 1.12, h2: "7px 0 2px", item: 2 }
 ];
 
 /** @param {number} [nivel] */
@@ -46,7 +46,9 @@ h1 { margin: 0; font-size: 19pt; line-height: 1.15; letter-spacing: 0.2px; color
 .contato { margin: 5px 0 0; color: #374151; font-size: 9pt; }
 .contato span + span::before { content: "  |  "; color: #9ca3af; white-space: pre; }
 .portfolio { margin: 1px 0 0; font-size: 9pt; color: #374151; }
-h2 { margin: ${n.h2}; padding-bottom: 2px; border-bottom: 0.75pt solid #d1d5db; font-size: 10.5pt; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #111827; }
+/* Cada seção é um bloco isolado: o título nunca divide a linha com o último item da seção anterior, e o espaço acima dele não encolhe na compactação. */
+.secao { display: block; clear: both; }
+h2 { break-after: avoid; margin: ${n.h2}; padding-bottom: 2px; border-bottom: 0.75pt solid #d1d5db; font-size: 10.5pt; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: #111827; }
 p { margin: 0; }
 .item { margin: 0 0 ${n.item}px; break-inside: avoid; }
 .item.compacto { margin-bottom: 3px; }
@@ -66,6 +68,23 @@ li::before { content: "•"; display: inline-block; width: 10px; text-indent: 0;
 .habilidades b { color: #111827; }
 `;
 };
+
+/** Agrupa os blocos em <section>: cada <h2> abre uma e leva só o que vem até o próximo <h2>. @param {string[]} blocos */
+function emSecoes(blocos) {
+  /** @type {string[]} */
+  const saida = [];
+  let aberta = false;
+  for (const b of blocos) {
+    if (b.startsWith("<h2>")) {
+      if (aberta) saida.push("</section>");
+      saida.push('<section class="secao">');
+      aberta = true;
+    }
+    saida.push(b);
+  }
+  if (aberta) saida.push("</section>");
+  return saida;
+}
 
 /**
  * HTML do currículo. Uma coluna, texto real, listas `<ul><li>` e sem tabela, imagem ou ícone.
@@ -133,7 +152,7 @@ function htmlDoCv(cv, nivel = 0) {
   }
   if (cv.idiomas.length) h.push(`<h2>Idiomas</h2>`, `<p>${esc(cv.idiomas.join(", "))}</p>`);
 
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Currículo - ${esc(id.nome || "")}</title><style>${cssDoNivel(nivel)}</style></head><body>${h.join("\n")}</body></html>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Currículo - ${esc(id.nome || "")}</title><style>${cssDoNivel(nivel)}</style></head><body>${emSecoes(h).join("\n")}</body></html>`;
 }
 
 /** Quantidade de páginas de um PDF gerado pelo Chrome. @param {Buffer} pdf */
