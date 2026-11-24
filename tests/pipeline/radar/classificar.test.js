@@ -177,3 +177,15 @@ test("RD25: a restrição só vale para vaga remota; presencial em Brasília nã
   assert.strictEqual(c.resultado, "aprovada");
   assert.strictEqual(c.local.ehVagaDF, true);
 });
+
+test("local: vaga com cidade ou estado de fora do DF e sem remoto explícito é descartada; remota ou do DF passa", () => {
+  const { detectarLocal } = require("../../../pipeline/radar/locais");
+  const sit = (titulo, extra = {}) => detectarLocal({ titulo, descricao: "", rotulos: [], ...extra }).situacao;
+  assert.strictEqual(sit("Fermazon - Ferro e Aço do Amazonas"), "fora");
+  assert.strictEqual(sit("Sifra Group - Desenvolvedor Junior (São José do Rio Preto)"), "fora");
+  assert.strictEqual(sit("Dev Júnior", { local: "Lins, SP" }), "fora");
+  assert.strictEqual(sit("Dev Júnior - Belo Horizonte / MG"), "fora");
+  assert.strictEqual(sit("Dev Júnior - Remoto, São Paulo"), "elegivel");
+  assert.strictEqual(sit("Dev Júnior", { local: "Brasília, DF" }), "elegivel");
+  assert.strictEqual(sit("Dev Go - Estágio"), "desconhecido"); // "Go" é linguagem, não o estado de Goiás
+});
